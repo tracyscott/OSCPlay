@@ -10,6 +10,27 @@
 # Mobile Tools for Java (J2ME)
 .mtj.tmp/
 
+# Distribution directory
+dist/*.jar
+dist/*.zip
+
+# Audio files
+audio/
+
+# Test Recordings
+recordings/
+
+session_config.json
+
+# Maven build directory
+target/
+
+# Auto-generated pom
+dependency-reduced-pom.xml
+
+
+
+
 # Package Files #
 *.jar
 *.war
