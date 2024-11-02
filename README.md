@@ -1,5 +1,5 @@
 # OSCPlay
-OSC Proxy Record Play utility.
+OSC Proxy Record Play utility.  Tired of installing Ableton Live trials on installation computers? Record OSC automation with a proxy server and play it back.
 
 
 # Pre-requisites
