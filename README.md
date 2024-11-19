@@ -6,9 +6,9 @@ Version 1.1 is an intermediate release that adds support for using recorded sess
 
 # Pre-requisites
 OSCPlay was built using JDK 17.  You will need to
-install JDK 17.
+[install JDK 17](https://adoptium.net/temurin/releases/)
 
-OSCPlay uses JavaFX.  You will need to install the Java FX SDK v17 and set an environment variable
+[JavaFX SDK v17](https://gluonhq.com/products/javafx/) and set an environment variable
 to that location (windows syntax):
 ```
 SET JFX_SDK=C:\\Users\tracy\\javafx-sdk-17.0.13\\lib
