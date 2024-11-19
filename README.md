@@ -1,6 +1,8 @@
 # OSCPlay
 OSC Proxy Record Play utility.  Tired of installing Ableton Live trials on installation computers? Record OSC automation with a proxy server and play it back.
 
+# Note
+Version 1.1 is an intermediate release that adds support for using recorded sessions for exporting calibration data for magnetometers which can then be used during proxy sessions to rewrite the traffic into a normalized parameter from 0 to 1.  Audio is currently broken.  There is now support for configuring a chain of rewrite handlers on the output.  Currently there is a specialized magnetometer rewriter, a handler for renaming the OSC address using regular expressions, and another that is capable of computing a moving average of a floating point single-argument message.
 
 # Pre-requisites
 OSCPlay was built using JDK 17.  You will need to
@@ -38,10 +40,9 @@ This is a quick utility meant to solve an immediate need.  Everything is loaded 
 Also, it doesn't respect native OSC timing constraints.  Everything is simply based on the original arrival times.
 
 # Future Work
+* Output Tee rewrite handler for proxying a single message to multiple destinations.
 * Streaming to and from disk.
 * Proper OSC time handling
-* Address re-writing
-* Ability to duplicate/tee streams to more endpoints
 * Various signal cleaning features such as moving averages, compression, clamping, remapping, normalization, etc.
 * Ability to trigger recorded sessions via OSC 
 * General usability

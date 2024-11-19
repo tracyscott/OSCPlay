@@ -1,7 +1,7 @@
 package xyz.theforks;
 
 import java.io.File;
-import java.util.concurrent.CountDownLatch;
+import java.io.IOException;
 
 import javafx.application.Application;
 import javafx.application.Platform;
@@ -15,43 +15,60 @@ import javafx.scene.control.ProgressBar;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TextInputDialog;
+import javafx.scene.control.ToggleButton;
 import javafx.scene.image.Image;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
 import javafx.stage.FileChooser.ExtensionFilter;
 import javafx.stage.Stage;
+import xyz.theforks.service.OSCInputService;
+import xyz.theforks.service.OSCOutputService;
 import xyz.theforks.service.OSCProxyService;
 
 public class OSCProxyApp extends Application {
+
     private OSCProxyService proxyService;
-    
+
     // UI Components
-    private TextField listenPortField;
-    private TextField forwardHostField;
-    private TextField forwardPortField;
+    private TextField inHostField;
+    private TextField inPortField;
+    private TextField outHostField;
+    private TextField outPortField;
     private Button startButton;
     private Button stopButton;
+    private Button manageButton;
     private Button recordButton;
     private Label messageCountLabel;
     private ComboBox<String> sessionComboBox;
     private Button playButton;
     private Button stopPlaybackButton;
-    private TextField playbackHostField;
-    private TextField playbackPortField;
     private ProgressBar playbackProgress;
     private Label playbackStatusLabel;
     private Button selectAudioButton;
     private Label audioFileLabel;
     private TextArea logArea;
+    private Button openPadsButton;
+    private Stage padWindow;
+    private Sampler sampler;
+    private ToggleButton inEnableButton;
+    private ToggleButton outEnableButton;
+    private ToggleButton proxyToggleButton;
+    private Label statusBar;
+    private Playback playback;
+
     private boolean isRecording = false;
 
     // CLI mode fields
     private static String sessionToPlay = null;
-    private static String playbackHost = "127.0.0.1";
-    private static int playbackPort = 9000;
+    private static String outHost = "127.0.0.1";
+    private static int outPort = 3030;
     private static boolean cliMode = false;
+
+    // Add fields
+    private RewriteHandlerManager handlerManager;
 
     public static void main(String[] args) {
         // Parse command line arguments
@@ -65,13 +82,13 @@ public class OSCProxyApp extends Application {
                     break;
                 case "--host":
                     if (i + 1 < args.length) {
-                        playbackHost = args[++i];
+                        outHost = args[++i];
                     }
                     break;
                 case "--port":
                     if (i + 1 < args.length) {
                         try {
-                            playbackPort = Integer.parseInt(args[++i]);
+                            outPort = Integer.parseInt(args[++i]);
                         } catch (NumberFormatException e) {
                             System.err.println("Invalid port number: " + args[i]);
                             System.exit(1);
@@ -94,9 +111,10 @@ public class OSCProxyApp extends Application {
 
     @Override
     public void start(Stage primaryStage) {
+        // Currently we can only have one playback operation at a time so we have a single instance
+        // here.  The various playback/stop playback buttons will control this instance.
+        playback = new Playback();
         proxyService = new OSCProxyService();
-        proxyService.setForwardHost(playbackHost);
-        proxyService.setForwardPort(playbackPort);
 
         // Create UI components
         GridPane grid = new GridPane();
@@ -104,37 +122,68 @@ public class OSCProxyApp extends Application {
         grid.setHgap(10);
         grid.setVgap(10);
 
-        // Port configuration
-        grid.add(new Label("Listen Port:"), 0, 0);
-        listenPortField = new TextField("8000");
-        grid.add(listenPortField, 1, 0);
+        // Input configuration
+        Label inLabel = new Label("In");
+        inLabel.setMinWidth(20);
+        grid.add(inLabel, 0, 0);
+        inHostField = new TextField("127.0.0.1");
+        inHostField.setMinWidth(500);  // Doubled from 250
+        inHostField.setStyle("-fx-font-size: 11px;");
+        grid.add(inHostField, 1, 0);
+        inPortField = new TextField("8000");
+        inPortField.setMaxWidth(200);  // Doubled from 100
+        inPortField.setStyle("-fx-font-size: 11px;");
+        grid.add(inPortField, 2, 0);
+        inEnableButton = new ToggleButton("Enable");
+        inEnableButton.setSelected(false);
+        inEnableButton.setMinWidth(100);
+        grid.add(inEnableButton, 3, 0);
 
-        grid.add(new Label("Forward Host:"), 0, 1);
-        forwardHostField = new TextField("127.0.0.1");
-        grid.add(forwardHostField, 1, 1);
+        Label outLabel = new Label("Out");
+        outLabel.setMinWidth(20);
+        grid.add(outLabel, 0, 1);
+        outHostField = new TextField(outHost);
+        outHostField.setMinWidth(500);  // Doubled from 250
+        outHostField.setStyle("-fx-font-size: 11px;");
+        grid.add(outHostField, 1, 1);
+        outPortField = new TextField("" + outPort);
+        outPortField.setMaxWidth(200);  // Doubled from 100
+        outPortField.setStyle("-fx-font-size: 11px;");
+        grid.add(outPortField, 2, 1);
 
-        grid.add(new Label("Forward Port:"), 0, 2);
-        forwardPortField = new TextField("9000");
-        grid.add(forwardPortField, 1, 2);
+        outEnableButton = new ToggleButton("Enable");
+        outEnableButton.setSelected(false);
+        outEnableButton.setMinWidth(100);
+        grid.add(outEnableButton, 3, 1);
+
+
+        // Create the logArea so we can pass it to RewriteHandlerManager
+        logArea = new TextArea();
+        // Create the status bar so we can pass it to RewriteHandlerManager
+        statusBar = new Label();
+        
+        // Add after out configuration section:
+        // Rewrite handlers section
+        handlerManager = new RewriteHandlerManager(proxyService, logArea, statusBar);
+        handlerManager.createUI(grid);
 
         // Control buttons
-        HBox controlButtons = new HBox(10);
-        startButton = new Button("Start Proxy");
-        stopButton = new Button("Stop Proxy");
-        stopButton.setDisable(true);
-        controlButtons.getChildren().addAll(startButton, stopButton);
-        grid.add(controlButtons, 0, 3, 2, 1);
+        proxyToggleButton = new ToggleButton("Enable Proxy");
+        proxyToggleButton.setSelected(false);
+        proxyToggleButton.setMinWidth(120);
+         // Move proxy toggle button down
+        grid.add(proxyToggleButton, 0, 7, 2, 1);
 
         // Recording controls
         HBox recordingControls = new HBox(10);
         recordButton = new Button("Start Recording");
         messageCountLabel = new Label("Messages: 0");
         recordingControls.getChildren().addAll(recordButton, messageCountLabel);
-        grid.add(recordingControls, 0, 4, 2, 1);
+        grid.add(recordingControls, 0, 8, 2, 1);
 
         // Playback controls
         VBox playbackControls = new VBox(10);
-        
+
         // Session selection
         HBox sessionControls = new HBox(10);
         sessionComboBox = new ComboBox<>();
@@ -142,24 +191,15 @@ public class OSCProxyApp extends Application {
         playButton = new Button("Play");
         stopPlaybackButton = new Button("Stop");
         stopPlaybackButton.setDisable(true);
+        manageButton = new Button("Manage");
         
-        sessionControls.getChildren().addAll(
-            new Label("Sessions:"),
-            sessionComboBox,
-            playButton,
-            stopPlaybackButton
-        );
 
-        HBox playbackParams = new HBox(10);
-        playbackHostField = new TextField(playbackHost);
-        playbackHostField.setPrefWidth(100);
-        playbackPortField = new TextField(Integer.toString(playbackPort));
-        playbackPortField.setPrefWidth(60);
-        playbackParams.getChildren().addAll(
-            new Label("Playback Host:"),
-            playbackHostField,
-            new Label("Playback Port:"),
-            playbackPortField
+        sessionControls.getChildren().addAll(
+                new Label("Recordings:"),
+                sessionComboBox,
+                playButton,
+                stopPlaybackButton,
+                manageButton
         );
 
         // Progress bar
@@ -167,56 +207,76 @@ public class OSCProxyApp extends Application {
         playbackProgress.setMaxWidth(Double.MAX_VALUE);
         playbackStatusLabel = new Label("Ready");
 
-        playbackControls.getChildren().addAll(
-            sessionControls,
-            playbackParams,
-            playbackProgress,
-            playbackStatusLabel
-        );
-        grid.add(playbackControls, 0, 5, 2, 1);
-
         // Audio controls
         HBox audioControls = new HBox(10);
         selectAudioButton = new Button("Select Audio File");
         audioFileLabel = new Label("No audio file selected");
         audioControls.getChildren().addAll(selectAudioButton, audioFileLabel);
-        grid.add(audioControls, 0, 6, 2, 1);
+        playbackControls.getChildren().addAll(
+                sessionControls,
+                playbackProgress,
+                playbackStatusLabel,
+                audioControls
+        );
+        grid.add(playbackControls, 0, 9, 2, 1);
+
+       
+       // Sampler pads
+        openPadsButton = new Button("Sampler Pads");
+        HBox openPadsControls = new HBox(10);
+        openPadsControls.getChildren().add(openPadsButton);
+        sampler = new Sampler(proxyService.getInputService(), proxyService.getOutputService(), logArea);
+        openPadsButton.setOnAction(e -> sampler.show());
+        // Disable sampler pad interface for now
+        // grid.add(openPadsControls, 0, 10, 2, 1);
 
         // Log area
-        logArea = new TextArea();
         logArea.setEditable(false);
         logArea.setPrefRowCount(6);
         logArea.setWrapText(true);
-        grid.add(logArea, 0, 7, 2, 1);
+        logArea.setMaxWidth(Double.MAX_VALUE); // Make it fill width
+        logArea.setMaxHeight(Double.MAX_VALUE); // Allow vertical expansion
+        GridPane.setHgrow(logArea, Priority.ALWAYS); // Allow horizontal growth
+        GridPane.setVgrow(logArea, Priority.ALWAYS); // Allow vertical growth
+        grid.add(logArea, 0, 11, GridPane.REMAINING, 1); // Span all columns
+
+        // Status bar
+        
+        statusBar.setMaxWidth(Double.MAX_VALUE);
+        statusBar.setPadding(new Insets(5));
+        statusBar.setStyle("-fx-background-color: #f0f0f0; -fx-border-color: #cccccc; -fx-border-width: 1 0 0 0;");
+        grid.add(statusBar, 0, 12, GridPane.REMAINING, 1);
 
         // Load the icon image
         Image icon = new Image(getClass().getResourceAsStream("/oscplayicon.png"));
-        
+
         // Set the icon on the primary stage
         primaryStage.getIcons().add(icon);
-        
+
         primaryStage.setResizable(true);
         primaryStage.setMinWidth(500);
-        primaryStage.setWidth(500);
+        primaryStage.setWidth(800);
         // Set up event handlers
         setupEventHandlers();
 
         // Bind properties
-        proxyService.messageCountProperty().addListener((obs, oldVal, newVal) -> 
-            messageCountLabel.setText("Messages: " + newVal.intValue()));
+        proxyService.messageCountProperty().addListener((obs, oldVal, newVal)
+                -> messageCountLabel.setText("Messages: " + newVal.intValue()));
 
-        proxyService.playbackProgressProperty().addListener((obs, oldVal, newVal) -> {
+        
+        playback.playbackProgressProperty().addListener((obs, oldVal, newVal) -> {
             playbackProgress.setProgress(newVal.doubleValue());
             updatePlaybackStatus(newVal.doubleValue());
         });
 
-        proxyService.isPlayingProperty().addListener((obs, oldVal, newVal) -> {
+        playback.isPlayingProperty().addListener((obs, oldVal, newVal) -> {
             playButton.setDisable(newVal);
             stopPlaybackButton.setDisable(!newVal);
             sessionComboBox.setDisable(newVal);
         });
-
+         
         // Session selection listener
+        /*
         sessionComboBox.getSelectionModel().selectedItemProperty().addListener(
             (obs, oldVal, newVal) -> {
                 if (newVal != null) {
@@ -225,6 +285,31 @@ public class OSCProxyApp extends Application {
                 }
             }
         );
+         */
+        // Make grid expand horizontally
+        GridPane.setHgrow(grid, Priority.ALWAYS);
+
+        // Make input/output fields expand
+        GridPane.setHgrow(inHostField, Priority.ALWAYS);
+        GridPane.setHgrow(outHostField, Priority.ALWAYS);
+        
+        // Make recording controls expand
+        GridPane.setHgrow(recordingControls, Priority.ALWAYS);
+        HBox.setHgrow(messageCountLabel, Priority.ALWAYS);
+
+        // Make session controls expand
+        GridPane.setHgrow(sessionControls, Priority.ALWAYS);
+        HBox.setHgrow(sessionComboBox, Priority.ALWAYS);
+        
+        // Make playback controls expand
+        GridPane.setHgrow(playbackControls, Priority.ALWAYS);
+        
+        // Make audio controls expand
+        GridPane.setHgrow(audioControls, Priority.ALWAYS);
+        HBox.setHgrow(audioFileLabel, Priority.ALWAYS);
+        
+        // Make sampler controls expand
+        GridPane.setHgrow(openPadsControls, Priority.ALWAYS);
 
         // Create scene
         Scene scene = new Scene(grid);
@@ -237,30 +322,94 @@ public class OSCProxyApp extends Application {
     }
 
     private void setupEventHandlers() {
-        startButton.setOnAction(e -> {
-            try {
-                int listenPort = Integer.parseInt(listenPortField.getText());
-                String forwardHost = forwardHostField.getText();
-                int forwardPort = Integer.parseInt(forwardPortField.getText());
-                proxyService.setForwardHost(forwardHost);
-                proxyService.setForwardPort(forwardPort);
-                proxyService.setListenPort(listenPort);
-                proxyService.startProxy();
-                startButton.setDisable(true);
-                stopButton.setDisable(false);
-                log("Proxy started - listening on port " + listenPort + 
-                    " and forwarding to port " + forwardPort);
-            } catch (Exception ex) {
-                showError("Error starting proxy", ex.getMessage());
-                log("Error: " + ex.getMessage());
+        inEnableButton.setOnAction(e -> {
+            boolean enabled = inEnableButton.isSelected();
+            // if enabled, turn the button green, otherwise grey
+            if (enabled) {
+                inEnableButton.setStyle("-fx-base: lightgreen;");
+                inEnableButton.setText("Disable");
+                if (proxyService != null) {
+                    OSCInputService inputService = proxyService.getInputService();
+                    if (inputService != null) {
+                        inputService.setInHost(inHostField.getText());
+                        inputService.setInPort(Integer.parseInt(inPortField.getText()));
+                        try {
+                            inputService.start();
+                            log("Started listening at " + inputService.getInHost() + ":" + inputService.getInPort());
+                        } catch (IOException ex) {
+                            showError("Error starting input", ex.getMessage());
+                            log("Error: " + ex.getMessage());
+                        }
+                    }
+                }
+            } else {
+                inEnableButton.setStyle("");
+                inEnableButton.setText("Enable");
+                if (proxyService != null) {
+                    OSCInputService inputService = proxyService.getInputService();
+                    if (inputService != null) {
+                        inputService.stop();
+                        log("Stopped listening at " + inputService.getInHost() + ":" + inputService.getInPort());
+                    }
+                }
             }
         });
 
-        stopButton.setOnAction(e -> {
-            proxyService.stopProxy();
-            startButton.setDisable(false);
-            stopButton.setDisable(true);
-            log("Proxy stopped");
+        outEnableButton.setOnAction(e -> {
+            boolean enabled = outEnableButton.isSelected();
+            if (enabled) {
+                outEnableButton.setStyle("-fx-base: lightgreen;");
+                outEnableButton.setText("Disable");
+                if (proxyService != null) {
+                    OSCOutputService outputService = proxyService.getOutputService();
+                    if (outputService != null) {
+                        outputService.setOutHost(outHostField.getText());
+                        outputService.setOutPort(Integer.parseInt(outPortField.getText()));
+                        try {
+                            outputService.start();
+                            log("Output started to " + outHostField.getText() + ":" + outPortField.getText());
+                        } catch (IOException ex) {
+                            showError("Error starting output", ex.getMessage());
+                            log("Error: " + ex.getMessage());
+                        }
+                    }
+                }
+            } else {
+                outEnableButton.setStyle("");
+                outEnableButton.setText("Enable");
+                if (proxyService != null) {
+                    OSCOutputService outputService = proxyService.getOutputService();
+                    if (outputService != null) {
+                        outputService.stop();
+                        log("Output stopped to " + outHostField.getText() + ":" + outPortField.getText());
+                    }
+                }
+            }
+        });
+
+        proxyToggleButton.setOnAction(e -> {
+            boolean enabled = proxyToggleButton.isSelected();
+            if (enabled) {
+                proxyToggleButton.setStyle("-fx-base: lightgreen;");
+                proxyToggleButton.setText("Disable Proxy");
+                try {
+                    proxyService.setInHost(inHostField.getText());
+                    proxyService.setInPort(Integer.parseInt(inPortField.getText()));
+                    proxyService.setOutHost(outHostField.getText());
+                    proxyService.setOutPort(Integer.parseInt(outPortField.getText()));
+                    proxyService.startProxy();
+                    log("Proxy started");
+                } catch (Exception ex) {
+                    showError("Error starting proxy", ex.getMessage());
+                    log("Error: " + ex.getMessage());
+                    proxyToggleButton.setSelected(false);
+                }
+            } else {
+                proxyToggleButton.setStyle("");
+                proxyToggleButton.setText("Enable Proxy");
+                proxyService.stopProxy();
+                log("Proxy stopped");
+            }
         });
 
         recordButton.setOnAction(e -> {
@@ -269,13 +418,29 @@ public class OSCProxyApp extends Application {
                 dialog.setTitle("New Recording");
                 dialog.setHeaderText("Enter a name for this recording session:");
                 dialog.showAndWait().ifPresent(name -> {
-                    proxyService.startRecording(name);
-                    isRecording = true;
+                    OSCInputService inputService = proxyService.getInputService();
+                    if (inputService == null) {
+                        showError("Error", "Input service not started");
+                        return;
+                    }
+                    try {
+                        inputService.startRecording(name);
+                        isRecording = true;
+                    } catch (IOException ioex) {
+                        log("Error starting recording: " + ioex.getMessage());
+                        return;
+                    }
+
                     recordButton.setText("Stop Recording");
                     log("Started recording session: " + name);
                 });
             } else {
-                proxyService.stopRecording();
+                OSCInputService inputService = proxyService.getInputService();
+                if (inputService == null) {
+                    showError("Error", "Input service not started");
+                    return;
+                }
+                inputService.stopRecording();
                 isRecording = false;
                 recordButton.setText("Start Recording");
                 updateSessionsList();
@@ -284,19 +449,22 @@ public class OSCProxyApp extends Application {
         });
 
         playButton.setOnAction(e -> {
-            playbackHost = playbackHostField.getText();
-            playbackPort = Integer.parseInt(playbackPortField.getText());
-            proxyService.setPlaybackHost(playbackHost);
-            proxyService.setPlaybackPort(playbackPort);
-            String selected = sessionComboBox.getSelectionModel().getSelectedItem();
-            if (selected != null) {
-                proxyService.playSession(selected);
-                log("Playing session: " + selected);
+            OSCOutputService outputService = proxyService.getOutputService();
+            outputService.setOutHost(outHostField.getText());
+            outputService.setOutPort(Integer.parseInt(outPortField.getText()));
+            try {
+                outputService.start();
+            } catch (IOException ioex) {
+                log("Error starting output: " + ioex.getMessage());
             }
+           
+            playback.setOutputService(outputService);
+            playback.playSession(sessionComboBox.getSelectionModel().getSelectedItem());
+            log("Playing session: " + sessionComboBox.getSelectionModel().getSelectedItem());
         });
 
         stopPlaybackButton.setOnAction(e -> {
-            proxyService.stopPlayback();
+            playback.stopPlayback();
             log("Playback stopped");
         });
 
@@ -316,12 +484,64 @@ public class OSCProxyApp extends Application {
 
             File selectedFile = fileChooser.showOpenDialog(selectAudioButton.getScene().getWindow());
             if (selectedFile != null) {
-                proxyService.associateAudioFile(selectedSession, selectedFile);
+                playback.associateAudioFile(selectedSession, selectedFile);
                 audioFileLabel.setText(selectedFile.getName());
                 log("Associated audio file '" + selectedFile.getName() + 
                     "' with session '" + selectedSession + "'");
             }
         });
+
+        // Add hover handlers to controls
+        proxyToggleButton.setOnMouseEntered(e -> 
+            statusBar.setText(proxyToggleButton.isSelected() ? "Disable proxy" : "Enable proxy"));
+        proxyToggleButton.setOnMouseExited(e -> 
+            statusBar.setText(""));
+
+        inEnableButton.setOnMouseEntered(e -> 
+            statusBar.setText(inEnableButton.isSelected() ? "Disable input" : "Enable input"));
+        inEnableButton.setOnMouseExited(e -> 
+            statusBar.setText(""));
+
+        outEnableButton.setOnMouseEntered(e -> 
+            statusBar.setText(outEnableButton.isSelected() ? "Disable output" : "Enable output"));
+        outEnableButton.setOnMouseExited(e -> 
+            statusBar.setText(""));
+
+        playButton.setOnMouseEntered(e ->
+            statusBar.setText("Play recorded session"));
+        playButton.setOnMouseExited(e ->
+            statusBar.setText(""));
+
+        recordButton.setOnMouseEntered(e ->
+            statusBar.setText(isRecording ? "Stop recording" : "Start recording"));
+        recordButton.setOnMouseExited(e ->
+            statusBar.setText(""));
+
+        manageButton.setOnAction(e -> {
+            ManageRecordings manager = new ManageRecordings(proxyService);
+            manager.show();
+        });
+
+        // Add hover handlers for input fields
+        inHostField.setOnMouseEntered(e -> 
+            statusBar.setText("Input Host: " + inHostField.getText()));
+        inHostField.setOnMouseExited(e -> 
+            statusBar.setText(""));
+
+        inPortField.setOnMouseEntered(e -> 
+            statusBar.setText("Input Port: " + inPortField.getText()));
+        inPortField.setOnMouseExited(e -> 
+            statusBar.setText(""));
+
+        outHostField.setOnMouseEntered(e -> 
+            statusBar.setText("Output Host: " + outHostField.getText()));
+        outHostField.setOnMouseExited(e -> 
+            statusBar.setText(""));
+
+        outPortField.setOnMouseEntered(e -> 
+            statusBar.setText("Output Port: " + outPortField.getText()));
+        outPortField.setOnMouseExited(e -> 
+            statusBar.setText(""));
     }
 
     private void updatePlaybackStatus(double progress) {
@@ -367,33 +587,6 @@ public class OSCProxyApp extends Application {
             System.err.println("No session specified");
             System.exit(1);
         }
-
-        CountDownLatch playbackComplete = new CountDownLatch(1);
-        OSCProxyService cliProxyService = new OSCProxyService();
-
-        cliProxyService.setPlaybackHost(playbackHost);
-        cliProxyService.setPlaybackPort(playbackPort);
-
-        cliProxyService.isPlayingProperty().addListener((obs, oldVal, newVal) -> {
-            if (!newVal) {
-                playbackComplete.countDown();
-            }
-        });
-
-        cliProxyService.playbackProgressProperty().addListener((obs, oldVal, newVal) -> {
-            //System.out.printf("Playback progress: %.1f%%\n", newVal.doubleValue() * 100);
-        });
-
-        try {
-            System.out.println("Playing session: " + sessionToPlay);
-            cliProxyService.playSession(sessionToPlay);
-            playbackComplete.await();
-            Thread.sleep(1000);
-        } catch (Exception e) {
-            System.err.println("Error during playback: " + e.getMessage());
-            System.exit(1);
-        }
-
         System.exit(0);
     }
 
