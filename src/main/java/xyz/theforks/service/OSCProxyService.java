@@ -9,9 +9,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.illposed.osc.OSCMessage;
 import com.illposed.osc.OSCSerializeException;
 
+import javafx.application.Platform;
 import javafx.beans.property.IntegerProperty;
 import javafx.beans.property.SimpleIntegerProperty;
+import xyz.theforks.model.OSCMessageRecord;
 import xyz.theforks.model.RecordingSession;
+import xyz.theforks.model.RecordingMode;
+import xyz.theforks.rewrite.RewriteEngine;
+import xyz.theforks.rewrite.RewriteHandler;
 
 public class OSCProxyService {
 
@@ -19,9 +24,11 @@ public class OSCProxyService {
     private OSCOutputService outputService;
     private RecordingSession currentSession;
     private boolean isRecording = false;
+    private RecordingMode recordingMode = RecordingMode.PRE_REWRITE;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private String recordingsDir = "recordings";
     private final IntegerProperty messageCount = new SimpleIntegerProperty(0);
+    private final RewriteEngine rewriteEngine;
 
     public OSCProxyService() {
         inputService = new OSCInputService();
@@ -32,6 +39,7 @@ public class OSCProxyService {
             }
         });
         outputService = new OSCOutputService();
+        rewriteEngine = new RewriteEngine(RewriteEngine.Context.PROXY);
     
         createDirectories();
     }
@@ -83,7 +91,33 @@ public class OSCProxyService {
 
     private void handleMessage(OSCMessage oscMessage) {
         try {
-            outputService.send(oscMessage);
+            OSCMessage messageToRecord = null;
+            OSCMessage messageToSend = oscMessage;
+            
+            // Handle recording based on mode
+            if (recordingMode == RecordingMode.PRE_REWRITE) {
+                messageToRecord = oscMessage; // Record original message
+            }
+            
+            // Apply rewrite handlers
+            messageToSend = rewriteEngine.processMessage(oscMessage);
+            if (messageToSend == null) {
+                // Message was cancelled by a rewrite handler
+                return;
+            }
+            
+            // Handle recording based on mode
+            if (recordingMode == RecordingMode.POST_REWRITE) {
+                messageToRecord = messageToSend; // Record processed message
+            }
+            
+            // Record the message if recording is active
+            if (isRecording && currentSession != null && messageToRecord != null) {
+                recordMessage(messageToRecord);
+            }
+            
+            // Send the processed message
+            outputService.send(messageToSend);
         } catch (IOException | OSCSerializeException e) {
             System.err.println("Error handling message: " + e.getMessage());
             e.printStackTrace();
@@ -142,5 +176,75 @@ public class OSCProxyService {
 
     public String getRecordingsDir() {
         return recordingsDir;
+    }
+    
+    /**
+     * Record an OSC message to the current session.
+     * @param message The message to record
+     */
+    private void recordMessage(OSCMessage message) {
+        OSCMessageRecord record = new OSCMessageRecord(
+                message.getAddress(),
+                message.getArguments().toArray()
+        );
+        currentSession.addMessage(record);
+        
+        // Update message count on JavaFX thread
+        Platform.runLater(() -> messageCount.set(messageCount.get() + 1));
+    }
+    
+    /**
+     * Get the current recording mode.
+     * @return The recording mode
+     */
+    public RecordingMode getRecordingMode() {
+        return recordingMode;
+    }
+    
+    /**
+     * Set the recording mode.
+     * @param mode The recording mode
+     */
+    public void setRecordingMode(RecordingMode mode) {
+        this.recordingMode = mode;
+    }
+    
+    /**
+     * Get the rewrite engine used by this proxy service.
+     * @return The rewrite engine
+     */
+    public RewriteEngine getRewriteEngine() {
+        return rewriteEngine;
+    }
+    
+    /**
+     * Register a rewrite handler with this proxy service.
+     * @param handler The handler to register
+     */
+    public void registerRewriteHandler(RewriteHandler handler) {
+        rewriteEngine.registerHandler(handler);
+    }
+    
+    /**
+     * Unregister a rewrite handler from this proxy service.
+     * @param handler The handler to unregister
+     */
+    public void unregisterRewriteHandler(RewriteHandler handler) {
+        rewriteEngine.unregisterHandler(handler);
+    }
+    
+    /**
+     * Clear all rewrite handlers from this proxy service.
+     */
+    public void clearRewriteHandlers() {
+        rewriteEngine.clearHandlers();
+    }
+    
+    /**
+     * Set the list of rewrite handlers, replacing any existing handlers.
+     * @param handlers The new list of handlers
+     */
+    public void setRewriteHandlers(List<RewriteHandler> handlers) {
+        rewriteEngine.setHandlers(handlers);
     }
 }

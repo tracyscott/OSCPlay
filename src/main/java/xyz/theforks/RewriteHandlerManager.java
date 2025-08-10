@@ -28,6 +28,7 @@ import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.stage.FileChooser;
+import xyz.theforks.Playback;
 import xyz.theforks.rewrite.RewriteHandler;
 import xyz.theforks.rewrite.RewriteRegistry;
 import xyz.theforks.service.OSCProxyService;
@@ -37,6 +38,7 @@ public class RewriteHandlerManager {
     private final OSCProxyService proxyService;
     private final TextArea logArea;
     private final Label statusBar;
+    private Playback playback; // Optional playback instance for handler synchronization
     private ListView<RewriteHandler> handlersListView;
     private ObservableList<RewriteHandler> activeHandlers = FXCollections.observableArrayList();
     private String currentConfigFile = null;
@@ -47,6 +49,19 @@ public class RewriteHandlerManager {
         this.proxyService = proxyService;
         this.logArea = logArea;
         this.statusBar = statusBar;
+    }
+    
+    /**
+     * Set the playback instance for handler synchronization.
+     * When set, rewrite handlers will be synchronized between proxy and playback.
+     * @param playback The playback instance
+     */
+    public void setPlayback(Playback playback) {
+        this.playback = playback;
+        // Sync existing handlers to playback if any
+        if (playback != null && !activeHandlers.isEmpty()) {
+            playback.setRewriteHandlers(new java.util.ArrayList<>(activeHandlers));
+        }
     }
 
     public void createUI(GridPane grid) {
@@ -145,8 +160,8 @@ public class RewriteHandlerManager {
                 if (handler.configure(args)) {
                     if (enabledCheck.isSelected()) {
                         // Re-register handler to apply new configuration
-                        proxyService.getOutputService().unregisterRewriteHandler(handler);
-                        proxyService.getOutputService().registerRewriteHandler(handler);
+                        proxyService.unregisterRewriteHandler(handler);
+                        proxyService.registerRewriteHandler(handler);
                     }
                     log("Updated configuration for " + handler.label());
                 } else {
@@ -170,8 +185,8 @@ public class RewriteHandlerManager {
                 activeHandlers.add(index - 1, current);
 
                 // Update service
-                proxyService.getOutputService().unregisterRewriteHandler(current);
-                proxyService.getOutputService().registerRewriteHandler(current);
+                proxyService.unregisterRewriteHandler(current);
+                proxyService.registerRewriteHandler(current);
 
                 handlersListView.getSelectionModel().select(index - 1);
             }
@@ -184,8 +199,8 @@ public class RewriteHandlerManager {
                 activeHandlers.add(index + 1, current);
 
                 // Update service
-                proxyService.getOutputService().unregisterRewriteHandler(current);
-                proxyService.getOutputService().registerRewriteHandler(current);
+                proxyService.unregisterRewriteHandler(current);
+                proxyService.registerRewriteHandler(current);
 
                 handlersListView.getSelectionModel().select(index + 1);
             }
@@ -305,7 +320,7 @@ public class RewriteHandlerManager {
     private void removeSelectedHandler() {
         RewriteHandler selected = handlersListView.getSelectionModel().getSelectedItem();
         if (selected != null) {
-            proxyService.getOutputService().unregisterRewriteHandler(selected);
+            proxyService.unregisterRewriteHandler(selected);
             activeHandlers.remove(selected);
         }
     }
@@ -404,7 +419,7 @@ public class RewriteHandlerManager {
                 
                 activeHandlers.add(handler);
                 if (enabled) {
-                    proxyService.getOutputService().registerRewriteHandler(handler);
+                    proxyService.registerRewriteHandler(handler);
                 }
             }
             

@@ -19,9 +19,12 @@ import javafx.beans.property.SimpleDoubleProperty;
 import javafx.scene.media.Media;
 import javafx.scene.media.MediaPlayer;
 import xyz.theforks.model.OSCMessageRecord;
+import xyz.theforks.model.PlaybackMode;
 import xyz.theforks.model.RecordingSession;
 import xyz.theforks.model.SessionConfig;
 import xyz.theforks.model.SessionMetadata;
+import xyz.theforks.rewrite.RewriteEngine;
+import xyz.theforks.rewrite.RewriteHandler;
 import xyz.theforks.service.OSCOutputService;
 
 /**
@@ -45,10 +48,13 @@ public class Playback {
     private boolean mediaReady = false;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private OSCOutputService outputService;
+    private PlaybackMode playbackMode = PlaybackMode.WITHOUT_REWRITE;
+    private final RewriteEngine rewriteEngine;
 
     public Playback() {
         loadSessionConfig();
         createDirectories();
+        rewriteEngine = new RewriteEngine(RewriteEngine.Context.PLAYBACK);
     }
 
      private void createDirectories() {
@@ -209,6 +215,16 @@ public class Playback {
                                 Thread.sleep(Math.max(0, delay - (System.currentTimeMillis() - startTime)));
 
                                 OSCMessage oscMsg = new OSCMessage(msg.getAddress(), List.of(msg.getArguments()));
+                                
+                                // Apply rewrite handlers based on playback mode
+                                if (playbackMode == PlaybackMode.WITH_REWRITE) {
+                                    oscMsg = rewriteEngine.processMessage(oscMsg);
+                                    if (oscMsg == null) {
+                                        // Message was cancelled by rewrite handler
+                                        continue;
+                                    }
+                                }
+                                
                                 outputService.send(oscMsg);
                                 //System.out.println("Played back message " + (i + 1) + "/" + totalMessages + 
                                 //                 ": " + msg.getAddress());
@@ -251,6 +267,61 @@ public class Playback {
         }
     }
 
+    /**
+     * Get the current playback mode.
+     * @return The playback mode
+     */
+    public PlaybackMode getPlaybackMode() {
+        return playbackMode;
+    }
+    
+    /**
+     * Set the playback mode.
+     * @param mode The playback mode
+     */
+    public void setPlaybackMode(PlaybackMode mode) {
+        this.playbackMode = mode;
+    }
+    
+    /**
+     * Get the rewrite engine used for playback.
+     * @return The rewrite engine
+     */
+    public RewriteEngine getRewriteEngine() {
+        return rewriteEngine;
+    }
+    
+    /**
+     * Register a rewrite handler for playback.
+     * @param handler The handler to register
+     */
+    public void registerRewriteHandler(RewriteHandler handler) {
+        rewriteEngine.registerHandler(handler);
+    }
+    
+    /**
+     * Unregister a rewrite handler from playback.
+     * @param handler The handler to unregister
+     */
+    public void unregisterRewriteHandler(RewriteHandler handler) {
+        rewriteEngine.unregisterHandler(handler);
+    }
+    
+    /**
+     * Clear all rewrite handlers from playback.
+     */
+    public void clearRewriteHandlers() {
+        rewriteEngine.clearHandlers();
+    }
+    
+    /**
+     * Set the list of rewrite handlers, replacing any existing handlers.
+     * @param handlers The new list of handlers
+     */
+    public void setRewriteHandlers(List<RewriteHandler> handlers) {
+        rewriteEngine.setHandlers(handlers);
+    }
+    
     @Override
     protected void finalize() throws Throwable {
         super.finalize();

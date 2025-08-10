@@ -10,13 +10,16 @@ import javafx.scene.Scene;
 import javafx.scene.paint.Color;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressBar;
+import javafx.scene.control.RadioButton;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TextInputDialog;
 import javafx.scene.control.ToggleButton;
+import javafx.scene.control.ToggleGroup;
 import javafx.scene.control.TitledPane;
 import javafx.scene.image.Image;
 import javafx.scene.layout.ColumnConstraints;
@@ -27,10 +30,16 @@ import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
 import javafx.stage.FileChooser.ExtensionFilter;
 import javafx.stage.Stage;
+import xyz.theforks.model.ApplicationConfig;
+import xyz.theforks.model.PlaybackMode;
+import xyz.theforks.model.RecordingMode;
 import xyz.theforks.service.OSCInputService;
 import xyz.theforks.service.OSCOutputService;
 import xyz.theforks.service.OSCProxyService;
 import xyz.theforks.ui.Theme;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.File;
 
 public class OSCProxyApp extends Application {
 
@@ -61,6 +70,16 @@ public class OSCProxyApp extends Application {
     private ToggleButton proxyToggleButton;
     private Label statusBar;
     private Playback playback;
+    
+    // Recording/Playback mode controls
+    private RadioButton preRewriteRadio;
+    private RadioButton postRewriteRadio;
+    private CheckBox playbackRewriteCheckBox;
+    
+    // Application configuration
+    private ApplicationConfig appConfig;
+    private final ObjectMapper configMapper = new ObjectMapper();
+    private final String APP_CONFIG_FILE = "app_config.json";
 
     private boolean isRecording = false;
 
@@ -114,10 +133,17 @@ public class OSCProxyApp extends Application {
 
     @Override
     public void start(Stage primaryStage) {
+        // Load application configuration
+        loadApplicationConfig();
+        
         // Currently we can only have one playback operation at a time so we have a single instance
         // here.  The various playback/stop playback buttons will control this instance.
         playback = new Playback();
         proxyService = new OSCProxyService();
+        
+        // Apply loaded configuration
+        proxyService.setRecordingMode(appConfig.getRecordingMode());
+        playback.setPlaybackMode(appConfig.getPlaybackMode());
 
         // Create UI components
         GridPane grid = new GridPane();
@@ -170,6 +196,9 @@ public class OSCProxyApp extends Application {
         // Rewrite handlers section (below proxy toggle)
         handlerManager = new RewriteHandlerManager(proxyService, logArea, statusBar);
         handlerManager.createUI(proxyGrid);
+        
+        // Connect the playback instance to the handler manager for synchronization
+        handlerManager.setPlayback(playback);
 
         // Configure column constraints to make the middle column expand
         ColumnConstraints col0 = new ColumnConstraints(); // Label column
@@ -185,10 +214,24 @@ public class OSCProxyApp extends Application {
         grid.add(proxyPane, 0, 0, GridPane.REMAINING, 1);
 
         // Recording controls
+        VBox recordingSection = new VBox(5);
         HBox recordingControls = new HBox(10);
         recordButton = new Button("Start Recording");
         messageCountLabel = new Label("Messages: 0");
         recordingControls.getChildren().addAll(recordButton, messageCountLabel);
+        
+        // Recording mode controls
+        HBox recordingModeControls = new HBox(10);
+        Label recordingModeLabel = new Label("Recording mode:");
+        ToggleGroup recordingModeGroup = new ToggleGroup();
+        preRewriteRadio = new RadioButton("Record Original Messages");
+        postRewriteRadio = new RadioButton("Record Processed Messages");
+        preRewriteRadio.setToggleGroup(recordingModeGroup);
+        postRewriteRadio.setToggleGroup(recordingModeGroup);
+        preRewriteRadio.setSelected(true); // Default to PRE_REWRITE
+        recordingModeControls.getChildren().addAll(recordingModeLabel, preRewriteRadio, postRewriteRadio);
+        
+        recordingSection.getChildren().addAll(recordingControls, recordingModeControls);
 
         // Playback controls
         VBox playbackControls = new VBox(10);
@@ -221,16 +264,24 @@ public class OSCProxyApp extends Application {
         selectAudioButton = new Button("Select Audio File");
         audioFileLabel = new Label("No Audio");
         audioControls.getChildren().addAll(selectAudioButton, audioFileLabel);
+        
+        // Playback mode controls
+        HBox playbackModeControls = new HBox(10);
+        playbackRewriteCheckBox = new CheckBox("Apply rewrite handlers during playback");
+        playbackRewriteCheckBox.setSelected(false); // Default to WITHOUT_REWRITE
+        playbackModeControls.getChildren().add(playbackRewriteCheckBox);
+        
         playbackControls.getChildren().addAll(
                 sessionControls,
                 playbackProgress,
                 playbackStatusLabel,
-                audioControls
+                audioControls,
+                playbackModeControls
         );
 
         // Group Record/Playback into titled panel
         VBox recordPlaybackBox = new VBox(10);
-        recordPlaybackBox.getChildren().addAll(recordingControls, playbackControls);
+        recordPlaybackBox.getChildren().addAll(recordingSection, playbackControls);
         TitledPane recordPlaybackPane = new TitledPane("Record / Playback", recordPlaybackBox);
         recordPlaybackPane.setCollapsible(false);
         grid.add(recordPlaybackPane, 0, 1, GridPane.REMAINING, 1);
@@ -332,6 +383,9 @@ public class OSCProxyApp extends Application {
         grid.getColumnConstraints().add(mainCol);
 
         // Create scene
+        // Apply loaded configuration to UI controls
+        applyConfigurationToUI();
+        
         Scene scene = new Scene(grid);
         scene.setFill(Color.web("#121212"));
         Theme.applyDark(scene);
@@ -380,13 +434,8 @@ public class OSCProxyApp extends Application {
                         showError("Error", "Input service not started");
                         return;
                     }
-                    try {
-                        inputService.startRecording(name);
-                        isRecording = true;
-                    } catch (IOException ioex) {
-                        log("Error starting recording: " + ioex.getMessage());
-                        return;
-                    }
+                    proxyService.startRecording(name);
+                    isRecording = true;
 
                     recordButton.setText("Stop Recording");
                     log("Started recording session: " + name);
@@ -397,7 +446,7 @@ public class OSCProxyApp extends Application {
                     showError("Error", "Input service not started");
                     return;
                 }
-                inputService.stopRecording();
+                proxyService.stopRecording();
                 isRecording = false;
                 recordButton.setText("Start Recording");
                 updateSessionsList();
@@ -470,6 +519,28 @@ public class OSCProxyApp extends Application {
             ManageRecordings manager = new ManageRecordings(proxyService);
             manager.show();
         });
+        
+        // Recording mode event handlers
+        preRewriteRadio.setOnAction(e -> {
+            proxyService.setRecordingMode(RecordingMode.PRE_REWRITE);
+            appConfig.setRecordingMode(RecordingMode.PRE_REWRITE);
+            saveApplicationConfig();
+        });
+        
+        postRewriteRadio.setOnAction(e -> {
+            proxyService.setRecordingMode(RecordingMode.POST_REWRITE);
+            appConfig.setRecordingMode(RecordingMode.POST_REWRITE);
+            saveApplicationConfig();
+        });
+        
+        // Playback mode event handler
+        playbackRewriteCheckBox.setOnAction(e -> {
+            PlaybackMode mode = playbackRewriteCheckBox.isSelected() ? 
+                PlaybackMode.WITH_REWRITE : PlaybackMode.WITHOUT_REWRITE;
+            playback.setPlaybackMode(mode);
+            appConfig.setPlaybackMode(mode);
+            saveApplicationConfig();
+        });
 
         // Add hover handlers for input fields
         inHostField.setOnMouseEntered(e -> 
@@ -539,8 +610,53 @@ public class OSCProxyApp extends Application {
         System.exit(0);
     }
 
+    /**
+     * Load application configuration from file or create default if not found.
+     */
+    private void loadApplicationConfig() {
+        try {
+            File configFile = new File(APP_CONFIG_FILE);
+            if (configFile.exists()) {
+                appConfig = configMapper.readValue(configFile, ApplicationConfig.class);
+            } else {
+                appConfig = new ApplicationConfig();
+                saveApplicationConfig(); // Save default config
+            }
+        } catch (Exception e) {
+            System.err.println("Error loading application config: " + e.getMessage());
+            appConfig = new ApplicationConfig(); // Use defaults
+        }
+    }
+    
+    /**
+     * Save application configuration to file.
+     */
+    private void saveApplicationConfig() {
+        try {
+            configMapper.writeValue(new File(APP_CONFIG_FILE), appConfig);
+        } catch (Exception e) {
+            System.err.println("Error saving application config: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Apply loaded configuration to UI controls.
+     */
+    private void applyConfigurationToUI() {
+        // Set recording mode radio buttons
+        if (appConfig.getRecordingMode() == RecordingMode.PRE_REWRITE) {
+            preRewriteRadio.setSelected(true);
+        } else {
+            postRewriteRadio.setSelected(true);
+        }
+        
+        // Set playback mode checkbox
+        playbackRewriteCheckBox.setSelected(appConfig.getPlaybackMode() == PlaybackMode.WITH_REWRITE);
+    }
+    
     @Override
     public void stop() {
         proxyService.stopProxy();
+        saveApplicationConfig(); // Save config on exit
     }
 }
