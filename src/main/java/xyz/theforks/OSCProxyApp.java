@@ -7,6 +7,7 @@ import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
+import javafx.scene.paint.Color;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
@@ -16,7 +17,9 @@ import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TextInputDialog;
 import javafx.scene.control.ToggleButton;
+import javafx.scene.control.TitledPane;
 import javafx.scene.image.Image;
+import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -27,6 +30,7 @@ import javafx.stage.Stage;
 import xyz.theforks.service.OSCInputService;
 import xyz.theforks.service.OSCOutputService;
 import xyz.theforks.service.OSCProxyService;
+import xyz.theforks.ui.Theme;
 
 public class OSCProxyApp extends Application {
 
@@ -53,8 +57,7 @@ public class OSCProxyApp extends Application {
     private Button openPadsButton;
     private Stage padWindow;
     private Sampler sampler;
-    private ToggleButton inEnableButton;
-    private ToggleButton outEnableButton;
+    
     private ToggleButton proxyToggleButton;
     private Label statusBar;
     private Playback playback;
@@ -122,64 +125,70 @@ public class OSCProxyApp extends Application {
         grid.setHgap(10);
         grid.setVgap(10);
 
+        // PROXY SECTION (encapsulates everything before Record/Playback)
+        GridPane proxyGrid = new GridPane();
+        proxyGrid.setHgap(10);
+        proxyGrid.setVgap(10);
+        proxyGrid.setPadding(new Insets(10));
+
         // Input configuration
         Label inLabel = new Label("In");
         inLabel.setMinWidth(20);
-        grid.add(inLabel, 0, 0);
+        proxyGrid.add(inLabel, 0, 0);
         inHostField = new TextField("127.0.0.1");
         inHostField.setMinWidth(500);  // Doubled from 250
         inHostField.setStyle("-fx-font-size: 11px;");
-        grid.add(inHostField, 1, 0);
+        proxyGrid.add(inHostField, 1, 0);
         inPortField = new TextField("8000");
         inPortField.setMaxWidth(200);  // Doubled from 100
         inPortField.setStyle("-fx-font-size: 11px;");
-        grid.add(inPortField, 2, 0);
-        inEnableButton = new ToggleButton("Enable");
-        inEnableButton.setSelected(false);
-        inEnableButton.setMinWidth(100);
-        grid.add(inEnableButton, 3, 0);
+        proxyGrid.add(inPortField, 2, 0);
 
         Label outLabel = new Label("Out");
         outLabel.setMinWidth(20);
-        grid.add(outLabel, 0, 1);
+        proxyGrid.add(outLabel, 0, 1);
         outHostField = new TextField(outHost);
         outHostField.setMinWidth(500);  // Doubled from 250
         outHostField.setStyle("-fx-font-size: 11px;");
-        grid.add(outHostField, 1, 1);
+        proxyGrid.add(outHostField, 1, 1);
         outPortField = new TextField("" + outPort);
         outPortField.setMaxWidth(200);  // Doubled from 100
         outPortField.setStyle("-fx-font-size: 11px;");
-        grid.add(outPortField, 2, 1);
-
-        outEnableButton = new ToggleButton("Enable");
-        outEnableButton.setSelected(false);
-        outEnableButton.setMinWidth(100);
-        grid.add(outEnableButton, 3, 1);
-
+        proxyGrid.add(outPortField, 2, 1);
 
         // Create the logArea so we can pass it to RewriteHandlerManager
         logArea = new TextArea();
         // Create the status bar so we can pass it to RewriteHandlerManager
         statusBar = new Label();
         
-        // Add after out configuration section:
-        // Rewrite handlers section
-        handlerManager = new RewriteHandlerManager(proxyService, logArea, statusBar);
-        handlerManager.createUI(grid);
-
-        // Control buttons
+        // Control buttons - Enable Proxy comes before rewrite handlers
         proxyToggleButton = new ToggleButton("Enable Proxy");
         proxyToggleButton.setSelected(false);
         proxyToggleButton.setMinWidth(120);
-         // Move proxy toggle button down
-        grid.add(proxyToggleButton, 0, 7, 2, 1);
+        proxyGrid.add(proxyToggleButton, 0, 2, GridPane.REMAINING, 1);
+
+        // Rewrite handlers section (below proxy toggle)
+        handlerManager = new RewriteHandlerManager(proxyService, logArea, statusBar);
+        handlerManager.createUI(proxyGrid);
+
+        // Configure column constraints to make the middle column expand
+        ColumnConstraints col0 = new ColumnConstraints(); // Label column
+        ColumnConstraints col1 = new ColumnConstraints(); // Host field column (expandable)
+        ColumnConstraints col2 = new ColumnConstraints(); // Port field column
+        
+        col1.setHgrow(Priority.ALWAYS);
+        
+        proxyGrid.getColumnConstraints().addAll(col0, col1, col2);
+
+        TitledPane proxyPane = new TitledPane("Proxy", proxyGrid);
+        proxyPane.setCollapsible(false);
+        grid.add(proxyPane, 0, 0, GridPane.REMAINING, 1);
 
         // Recording controls
         HBox recordingControls = new HBox(10);
         recordButton = new Button("Start Recording");
         messageCountLabel = new Label("Messages: 0");
         recordingControls.getChildren().addAll(recordButton, messageCountLabel);
-        grid.add(recordingControls, 0, 8, 2, 1);
 
         // Playback controls
         VBox playbackControls = new VBox(10);
@@ -210,7 +219,7 @@ public class OSCProxyApp extends Application {
         // Audio controls
         HBox audioControls = new HBox(10);
         selectAudioButton = new Button("Select Audio File");
-        audioFileLabel = new Label("No audio file selected");
+        audioFileLabel = new Label("No Audio");
         audioControls.getChildren().addAll(selectAudioButton, audioFileLabel);
         playbackControls.getChildren().addAll(
                 sessionControls,
@@ -218,7 +227,13 @@ public class OSCProxyApp extends Application {
                 playbackStatusLabel,
                 audioControls
         );
-        grid.add(playbackControls, 0, 9, 2, 1);
+
+        // Group Record/Playback into titled panel
+        VBox recordPlaybackBox = new VBox(10);
+        recordPlaybackBox.getChildren().addAll(recordingControls, playbackControls);
+        TitledPane recordPlaybackPane = new TitledPane("Record / Playback", recordPlaybackBox);
+        recordPlaybackPane.setCollapsible(false);
+        grid.add(recordPlaybackPane, 0, 1, GridPane.REMAINING, 1);
 
        
        // Sampler pads
@@ -238,14 +253,14 @@ public class OSCProxyApp extends Application {
         logArea.setMaxHeight(Double.MAX_VALUE); // Allow vertical expansion
         GridPane.setHgrow(logArea, Priority.ALWAYS); // Allow horizontal growth
         GridPane.setVgrow(logArea, Priority.ALWAYS); // Allow vertical growth
-        grid.add(logArea, 0, 11, GridPane.REMAINING, 1); // Span all columns
+        grid.add(logArea, 0, 2, GridPane.REMAINING, 1); // Span all columns
 
         // Status bar
         
         statusBar.setMaxWidth(Double.MAX_VALUE);
         statusBar.setPadding(new Insets(5));
-        statusBar.setStyle("-fx-background-color: #f0f0f0; -fx-border-color: #cccccc; -fx-border-width: 1 0 0 0;");
-        grid.add(statusBar, 0, 12, GridPane.REMAINING, 1);
+        statusBar.getStyleClass().add("status-bar");
+        grid.add(statusBar, 0, 3, GridPane.REMAINING, 1);
 
         // Load the icon image
         Image icon = new Image(getClass().getResourceAsStream("/oscplayicon.png"));
@@ -275,17 +290,17 @@ public class OSCProxyApp extends Application {
             sessionComboBox.setDisable(newVal);
         });
          
-        // Session selection listener
-        /*
+        // Session selection listener: update audio label or reset when unbound
         sessionComboBox.getSelectionModel().selectedItemProperty().addListener(
             (obs, oldVal, newVal) -> {
                 if (newVal != null) {
-                    String audioFile = proxyService.getAssociatedAudioFile(newVal);
-                    audioFileLabel.setText(audioFile != null ? audioFile : "No audio file selected");
+                    String audioFile = playback.getAssociatedAudioFile(newVal);
+                    audioFileLabel.setText(audioFile != null ? audioFile : "No Audio");
+                } else {
+                    audioFileLabel.setText("No Audio");
                 }
             }
         );
-         */
         // Make grid expand horizontally
         GridPane.setHgrow(grid, Priority.ALWAYS);
 
@@ -311,8 +326,15 @@ public class OSCProxyApp extends Application {
         // Make sampler controls expand
         GridPane.setHgrow(openPadsControls, Priority.ALWAYS);
 
+        // Configure main grid column constraints to make it expand to window width
+        ColumnConstraints mainCol = new ColumnConstraints();
+        mainCol.setHgrow(Priority.ALWAYS);
+        grid.getColumnConstraints().add(mainCol);
+
         // Create scene
         Scene scene = new Scene(grid);
+        scene.setFill(Color.web("#121212"));
+        Theme.applyDark(scene);
         primaryStage.setTitle("OSC Play");
         primaryStage.setScene(scene);
         primaryStage.show();
@@ -322,75 +344,11 @@ public class OSCProxyApp extends Application {
     }
 
     private void setupEventHandlers() {
-        inEnableButton.setOnAction(e -> {
-            boolean enabled = inEnableButton.isSelected();
-            // if enabled, turn the button green, otherwise grey
-            if (enabled) {
-                inEnableButton.setStyle("-fx-base: lightgreen;");
-                inEnableButton.setText("Disable");
-                if (proxyService != null) {
-                    OSCInputService inputService = proxyService.getInputService();
-                    if (inputService != null) {
-                        inputService.setInHost(inHostField.getText());
-                        inputService.setInPort(Integer.parseInt(inPortField.getText()));
-                        try {
-                            inputService.start();
-                            log("Started listening at " + inputService.getInHost() + ":" + inputService.getInPort());
-                        } catch (IOException ex) {
-                            showError("Error starting input", ex.getMessage());
-                            log("Error: " + ex.getMessage());
-                        }
-                    }
-                }
-            } else {
-                inEnableButton.setStyle("");
-                inEnableButton.setText("Enable");
-                if (proxyService != null) {
-                    OSCInputService inputService = proxyService.getInputService();
-                    if (inputService != null) {
-                        inputService.stop();
-                        log("Stopped listening at " + inputService.getInHost() + ":" + inputService.getInPort());
-                    }
-                }
-            }
-        });
-
-        outEnableButton.setOnAction(e -> {
-            boolean enabled = outEnableButton.isSelected();
-            if (enabled) {
-                outEnableButton.setStyle("-fx-base: lightgreen;");
-                outEnableButton.setText("Disable");
-                if (proxyService != null) {
-                    OSCOutputService outputService = proxyService.getOutputService();
-                    if (outputService != null) {
-                        outputService.setOutHost(outHostField.getText());
-                        outputService.setOutPort(Integer.parseInt(outPortField.getText()));
-                        try {
-                            outputService.start();
-                            log("Output started to " + outHostField.getText() + ":" + outPortField.getText());
-                        } catch (IOException ex) {
-                            showError("Error starting output", ex.getMessage());
-                            log("Error: " + ex.getMessage());
-                        }
-                    }
-                }
-            } else {
-                outEnableButton.setStyle("");
-                outEnableButton.setText("Enable");
-                if (proxyService != null) {
-                    OSCOutputService outputService = proxyService.getOutputService();
-                    if (outputService != null) {
-                        outputService.stop();
-                        log("Output stopped to " + outHostField.getText() + ":" + outPortField.getText());
-                    }
-                }
-            }
-        });
+        // Removed individual In/Out enable buttons; proxy toggle controls both
 
         proxyToggleButton.setOnAction(e -> {
             boolean enabled = proxyToggleButton.isSelected();
             if (enabled) {
-                proxyToggleButton.setStyle("-fx-base: lightgreen;");
                 proxyToggleButton.setText("Disable Proxy");
                 try {
                     proxyService.setInHost(inHostField.getText());
@@ -405,7 +363,6 @@ public class OSCProxyApp extends Application {
                     proxyToggleButton.setSelected(false);
                 }
             } else {
-                proxyToggleButton.setStyle("");
                 proxyToggleButton.setText("Enable Proxy");
                 proxyService.stopProxy();
                 log("Proxy stopped");
@@ -497,15 +454,7 @@ public class OSCProxyApp extends Application {
         proxyToggleButton.setOnMouseExited(e -> 
             statusBar.setText(""));
 
-        inEnableButton.setOnMouseEntered(e -> 
-            statusBar.setText(inEnableButton.isSelected() ? "Disable input" : "Enable input"));
-        inEnableButton.setOnMouseExited(e -> 
-            statusBar.setText(""));
-
-        outEnableButton.setOnMouseEntered(e -> 
-            statusBar.setText(outEnableButton.isSelected() ? "Disable output" : "Enable output"));
-        outEnableButton.setOnMouseExited(e -> 
-            statusBar.setText(""));
+        // Removed hover handlers for removed In/Out enable buttons
 
         playButton.setOnMouseEntered(e ->
             statusBar.setText("Play recorded session"));

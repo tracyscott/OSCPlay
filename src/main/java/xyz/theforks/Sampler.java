@@ -17,6 +17,7 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.stage.Stage;
+import xyz.theforks.ui.Theme;
 import xyz.theforks.service.OSCInputService;
 import xyz.theforks.service.OSCOutputService;
 
@@ -125,6 +126,7 @@ public class Sampler {
         }
 
         Scene scene = new Scene(padGrid);
+        Theme.applyDark(scene);
         padWindow.setScene(scene);
         return padWindow;
     }

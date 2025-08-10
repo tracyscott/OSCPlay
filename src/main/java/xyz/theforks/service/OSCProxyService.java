@@ -20,7 +20,7 @@ public class OSCProxyService {
     private RecordingSession currentSession;
     private boolean isRecording = false;
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private final String RECORDINGS_DIR = "recordings";
+    private String recordingsDir = "recordings";
     private final IntegerProperty messageCount = new SimpleIntegerProperty(0);
 
     public OSCProxyService() {
@@ -45,7 +45,7 @@ public class OSCProxyService {
     }
 
     private void createDirectories() {
-        new File(RECORDINGS_DIR).mkdirs();
+        new File(recordingsDir).mkdirs();
     }
 
     public IntegerProperty messageCountProperty() {
@@ -108,7 +108,7 @@ public class OSCProxyService {
 
     private void saveSession(RecordingSession session) {
         try {
-            File dir = new File(RECORDINGS_DIR);
+            File dir = new File(recordingsDir);
             if (!dir.exists()) {
                 dir.mkdirs();
             }
@@ -123,7 +123,7 @@ public class OSCProxyService {
 
     public List<String> getRecordedSessions() {
         List<String> sessions = new ArrayList<>();
-        File dir = new File(RECORDINGS_DIR);
+        File dir = new File(recordingsDir);
         if (dir.exists()) {
             File[] files = dir.listFiles((d, name) -> name.endsWith(".json"));
             if (files != null) {
@@ -133,5 +133,14 @@ public class OSCProxyService {
             }
         }
         return sessions;
+    }
+
+    public void setRecordingsDir(String recordingsDir) {
+        this.recordingsDir = recordingsDir;
+        createDirectories();
+    }
+
+    public String getRecordingsDir() {
+        return recordingsDir;
     }
 }

@@ -112,8 +112,9 @@ class RecordingSessionTest {
 
     @Test
     void testLoadSessionNonExistentFile() throws IOException {
-        // This will look for recordings/nonexistent.json which won't exist
-        RecordingSession session = RecordingSession.loadSession("nonexistent");
+        // This will look for nonexistent.json in temp recordings dir which won't exist
+        String testRecordingsDir = tempDir.resolve("recordings").toString();
+        RecordingSession session = RecordingSession.loadSession("nonexistent", testRecordingsDir);
         assertNull(session);
     }
 

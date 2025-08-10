@@ -1,0 +1,128 @@
+/* Base */
+* {
+  -fx-font-family: "Inter", "Helvetica Neue", Arial, sans-serif;
+}
+
+/* Root backgrounds */
+.root {
+  -fx-base: #202020;
+  -fx-background: #121212;
+  -fx-control-inner-background: #1a1a1a;
+  -fx-accent: #2e7dff;
+  -fx-default-button: #2e7dff;
+  -fx-focus-color: #2e7dff;
+  -fx-faint-focus-color: rgba(46,125,255,0.2);
+  -fx-text-fill: #e0e0e0;
+}
+
+/* Labels */
+.label {
+  -fx-text-fill: #d0d0d0;
+}
+
+/* Text inputs */
+.text-field, .text-area {
+  -fx-text-fill: #e0e0e0;
+  -fx-background-color: #1b1b1b, #1b1b1b, #141414;
+  -fx-background-insets: 0, 1, 2;
+  -fx-background-radius: 6, 5, 4;
+  -fx-prompt-text-fill: #7a7a7a;
+  -fx-highlight-fill: #2e7dff;
+  -fx-highlight-text-fill: white;
+  -fx-border-color: #333333;
+  -fx-border-radius: 6;
+}
+
+/* Buttons */
+.button {
+  -fx-background-color: #2a2a2a;
+  -fx-text-fill: #e0e0e0;
+  -fx-background-radius: 6;
+  -fx-border-color: #3a3a3a;
+  -fx-border-radius: 6;
+}
+.button:hover {
+  -fx-background-color: #333333;
+}
+.button:pressed {
+  -fx-background-color: #3a3a3a;
+}
+
+/* Toggle Buttons */
+.toggle-button {
+  -fx-background-color: #2a2a2a;
+  -fx-text-fill: #e0e0e0;
+  -fx-background-radius: 16;
+  -fx-border-color: #3a3a3a;
+  -fx-border-radius: 16;
+}
+.toggle-button:selected {
+  -fx-background-color: #2e7dff;
+  -fx-text-fill: white;
+  -fx-border-color: transparent;
+}
+
+/* ComboBox */
+.combo-box-base {
+  -fx-background-color: #1b1b1b;
+  -fx-text-fill: #e0e0e0;
+  -fx-border-color: #333333;
+  -fx-background-radius: 6;
+  -fx-border-radius: 6;
+}
+.list-cell {
+  -fx-background-color: #1b1b1b;
+  -fx-text-fill: #e0e0e0;
+}
+.list-cell:filled:selected, .list-cell:filled:selected:hover {
+  -fx-background-color: #2e7dff;
+  -fx-text-fill: white;
+}
+
+/* ProgressBar */
+.progress-bar > .track {
+  -fx-background-color: #2a2a2a;
+}
+.progress-bar > .bar {
+  -fx-background-color: linear-gradient(to right, #2e7dff, #7aa8ff);
+}
+
+/* Status bar helper class if used */
+.status-bar {
+  -fx-background-color: #1e1e1e;
+  -fx-border-color: #333333;
+  -fx-text-fill: #b0b0b0;
+}
+
+/* Charts */
+.chart {
+  -fx-background-color: #121212;
+}
+.chart-plot-background {
+  -fx-background-color: #1a1a1a;
+}
+.axis {
+  -fx-tick-label-fill: #c0c0c0;
+}
+.chart-legend, .chart-title {
+  -fx-text-fill: #e0e0e0;
+}
+
+/* TitledPane styling */
+.titled-pane > .title {
+  -fx-background-color: linear-gradient(#1a1a1a, #161616);
+  -fx-text-fill: #e0e0e0;
+  -fx-font-weight: bold;
+  -fx-background-radius: 8 8 0 0;
+  -fx-padding: 8 12;
+}
+.titled-pane > *.content {
+  -fx-background-color: #151515;
+  -fx-background-insets: 0;
+  -fx-background-radius: 0 0 8 8;
+  -fx-border-color: #2a2a2a;
+  -fx-border-radius: 8;
+  -fx-padding: 10;
+}
+
+

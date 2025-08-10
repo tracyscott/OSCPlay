@@ -31,6 +31,7 @@ import javafx.stage.FileChooser;
 import xyz.theforks.rewrite.RewriteHandler;
 import xyz.theforks.rewrite.RewriteRegistry;
 import xyz.theforks.service.OSCProxyService;
+import xyz.theforks.ui.Theme;
 
 public class RewriteHandlerManager {
     private final OSCProxyService proxyService;
@@ -50,7 +51,7 @@ public class RewriteHandlerManager {
 
     public void createUI(GridPane grid) {
         // Rewrite handlers section
-        handlersLabel = new Label("Rewrite Handlers:");
+        handlersLabel = new Label("Rewrite Handler Config:");
         grid.add(handlersLabel, 0, 4, GridPane.REMAINING, 1);  // Modified to span all columns
 
         handlersListView = new ListView<>(activeHandlers);
@@ -63,6 +64,7 @@ public class RewriteHandlerManager {
         // Handler management buttons across multiple columns
         HBox handlerButtons = new HBox(10);
         setupHandlerButtons(handlerButtons);
+        GridPane.setHgrow(handlerButtons, Priority.ALWAYS);
         grid.add(handlerButtons, 0, 6, GridPane.REMAINING, 1); // Span all columns
 
         loadLastConfig();
@@ -71,7 +73,7 @@ public class RewriteHandlerManager {
     private void updateHandlersLabel() {
         String filename = currentConfigFile != null ? 
             " (" + new File(currentConfigFile).getName() + ")" : "";
-        handlersLabel.setText("Rewrite Handlers:" + filename);
+        handlersLabel.setText("Rewrite Handler Config:" + filename);
     }
 
     private void setupHandlersListView() {
@@ -253,10 +255,24 @@ public class RewriteHandlerManager {
         });
         saveAsButton.setOnAction(e -> saveAsHandler());
 
-        // Center the buttons in their container
+        // Create left-aligned container for Add/Remove buttons
+        HBox leftButtons = new HBox(10);
+        leftButtons.setAlignment(Pos.CENTER_LEFT);
+        leftButtons.getChildren().addAll(addHandler, removeHandler);
+        
+        // Create right-aligned container for file operation buttons  
+        HBox rightButtons = new HBox(10);
+        rightButtons.setAlignment(Pos.CENTER_RIGHT);
+        rightButtons.getChildren().addAll(newButton, loadButton, saveButton, saveAsButton);
+        
+        // Add spacer region between left and right button groups
+        HBox spacer = new HBox();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+        
+        // Configure main container and add all components
         handlerButtons.setAlignment(Pos.CENTER);
-        handlerButtons.setSpacing(10);
-        handlerButtons.getChildren().addAll(newButton, loadButton, addHandler, removeHandler, saveButton, saveAsButton);
+        handlerButtons.setSpacing(0);
+        handlerButtons.getChildren().addAll(leftButtons, spacer, rightButtons);
     }
 
     // Methods moved from OSCProxyApp
@@ -265,6 +281,9 @@ public class RewriteHandlerManager {
         dialog.setTitle("Add Rewrite Handler");
         dialog.setHeaderText("Select handler type:");
         dialog.getItems().addAll(Arrays.asList(RewriteRegistry.getHandlerLabels()));
+
+        // Apply dark theme when the dialog is shown
+        dialog.setOnShown(e -> Theme.applyDark(dialog.getDialogPane().getScene()));
 
         Optional<String> result = dialog.showAndWait();
         result.ifPresent(handlerLabel -> {

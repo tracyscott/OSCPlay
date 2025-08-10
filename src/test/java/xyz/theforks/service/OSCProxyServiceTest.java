@@ -20,9 +20,9 @@ class OSCProxyServiceTest {
 
     @BeforeEach
     void setUp() {
-        // Set up temporary recordings directory
-        System.setProperty("user.dir", tempDir.toString());
+        // Set up proxy service with temporary recordings directory
         proxyService = new OSCProxyService();
+        proxyService.setRecordingsDir(tempDir.resolve("recordings").toString());
     }
 
     @Test
@@ -52,7 +52,7 @@ class OSCProxyServiceTest {
     @Test
     void testRecordingDirectoryCreation() {
         // The constructor should create the recordings directory
-        File recordingsDir = new File("recordings");
+        File recordingsDir = new File(proxyService.getRecordingsDir());
         assertTrue(recordingsDir.exists());
         assertTrue(recordingsDir.isDirectory());
     }
@@ -60,7 +60,7 @@ class OSCProxyServiceTest {
     @Test
     void testGetRecordedSessionsEmptyDirectory() {
         // Clear any existing files first
-        File recordingsDir = new File("recordings");
+        File recordingsDir = new File(proxyService.getRecordingsDir());
         if (recordingsDir.exists()) {
             File[] files = recordingsDir.listFiles();
             if (files != null) {
@@ -78,7 +78,7 @@ class OSCProxyServiceTest {
     @Test
     void testGetRecordedSessionsWithFiles() throws IOException {
         // Clear existing files first
-        File recordingsDir = new File("recordings");
+        File recordingsDir = new File(proxyService.getRecordingsDir());
         if (recordingsDir.exists()) {
             File[] files = recordingsDir.listFiles();
             if (files != null) {
@@ -116,7 +116,7 @@ class OSCProxyServiceTest {
         proxyService.stopRecording();
         
         // Verify session file was created
-        File sessionFile = new File("recordings", sessionName + ".json");
+        File sessionFile = new File(proxyService.getRecordingsDir(), sessionName + ".json");
         assertTrue(sessionFile.exists());
         
         // Verify it appears in the sessions list
@@ -133,7 +133,7 @@ class OSCProxyServiceTest {
     @Test
     void testMultipleRecordingSessions() throws IOException {
         // Clear existing files first
-        File recordingsDir = new File("recordings");
+        File recordingsDir = new File(proxyService.getRecordingsDir());
         if (recordingsDir.exists()) {
             File[] files = recordingsDir.listFiles();
             if (files != null) {
@@ -169,7 +169,7 @@ class OSCProxyServiceTest {
         proxyService.startRecording(sessionName);
         proxyService.stopRecording();
         
-        File sessionFile = new File("recordings", sessionName + ".json");
+        File sessionFile = new File(proxyService.getRecordingsDir(), sessionName + ".json");
         long firstModified = sessionFile.lastModified();
         
         // Wait a bit to ensure timestamp difference

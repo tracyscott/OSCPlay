@@ -17,6 +17,7 @@ import javafx.scene.transform.Rotate;
 import javafx.scene.transform.Translate;
 import javafx.stage.Stage;
 import xyz.theforks.rewrite.InterlaceMagHandler;
+import xyz.theforks.ui.Theme;
 
 public class CalibrationViewer {
     private static final int WIDTH = 800;
@@ -43,7 +44,7 @@ public class CalibrationViewer {
         // Enable depth buffer
         root.getChildren().add(world);
         Scene scene = new Scene(root, WIDTH, HEIGHT, true, SceneAntialiasing.BALANCED);
-        scene.setFill(Color.BLACK);
+        Theme.applyDark(scene);
         scene.setCamera(camera);
 
         // Add ambient light

@@ -53,9 +53,13 @@ public class RecordingSession {
     public void setStartTime(long startTime) { this.startTime = startTime; }
 
     static public RecordingSession loadSession(String sessionName) throws IOException {
+        return loadSession(sessionName, RECORDINGS_DIR);
+    }
+
+    static public RecordingSession loadSession(String sessionName, String recordingsDir) throws IOException {
         final ObjectMapper objectMapper = new ObjectMapper();
 
-        File file = new File(RECORDINGS_DIR, sessionName + ".json");
+        File file = new File(recordingsDir, sessionName + ".json");
         if (!file.exists()) {
             System.err.println("Recording file not found: " + file.getAbsolutePath());
             return null;

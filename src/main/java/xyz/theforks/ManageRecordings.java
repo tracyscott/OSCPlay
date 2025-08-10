@@ -21,6 +21,7 @@ import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import xyz.theforks.model.RecordingSession;
 import xyz.theforks.service.OSCProxyService;
+import xyz.theforks.ui.Theme;
 
 public class ManageRecordings {
     private final Stage stage;
@@ -74,6 +75,7 @@ public class ManageRecordings {
         root.getChildren().add(recordingsList);
         
         Scene scene = new Scene(root, 400, 300);
+        Theme.applyDark(scene);
         stage.setScene(scene);
     }
 
