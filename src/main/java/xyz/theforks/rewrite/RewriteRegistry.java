@@ -5,7 +5,9 @@ public class RewriteRegistry {
         new PitchShiftHandler(),
         new InterlaceMagHandler(),
         new RenameHandler(),
-        new MovingAvgHandler()
+        new MovingAvgHandler(),
+        new IntToBangHandler(),
+        new PathTrimHandler()
     };
 
     public static RewriteHandler[] getHandlers() {
