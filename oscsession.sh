@@ -1,5 +1,7 @@
 #!/bin/bash
 
+VERSION="1.1.1"
+
 # OSCSession - Non-interactive session playback
 # Usage: ./oscsession.sh <session_name> [additional_args]
 # Requires JFX_SDK environment variable to be set to JavaFX SDK lib directory
@@ -28,18 +30,18 @@ fi
 
 # Find the JAR file
 JAR_FILE=""
-if [ -f "target/osc-play-1.1.jar" ]; then
-    JAR_FILE="target/osc-play-1.1.jar"
-elif [ -f "target/osc-play-1.1-shaded.jar" ]; then
-    JAR_FILE="target/osc-play-1.1-shaded.jar"
-elif [ -f "osc-play-1.1.jar" ]; then
-    JAR_FILE="osc-play-1.1.jar"
+if [ -f "target/osc-play-${VERSION}.jar" ]; then
+    JAR_FILE="target/osc-play-${VERSION}.jar"
+elif [ -f "target/osc-play-${VERSION}-shaded.jar" ]; then
+    JAR_FILE="target/osc-play-${VERSION}-shaded.jar"
+elif [ -f "osc-play-${VERSION}.jar" ]; then
+    JAR_FILE="osc-play-${VERSION}.jar"
 else
     echo "Error: Could not find osc-play JAR file"
     echo "Expected one of:"
-    echo "  target/osc-play-1.1.jar"
-    echo "  target/osc-play-1.1-shaded.jar" 
-    echo "  osc-play-1.1.jar"
+    echo "  target/osc-play-${VERSION}.jar"
+    echo "  target/osc-play-${VERSION}-shaded.jar" 
+    echo "  osc-play-${VERSION}.jar"
     exit 1
 fi
 
