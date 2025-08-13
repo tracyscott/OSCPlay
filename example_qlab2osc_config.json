@@ -1,0 +1,14 @@
+{
+    "qlabHost" : "localhost",
+    "qlabPort" : 53000,
+    "workspaceId" : "41BD943C-E013-4264-83E1-775AF0B60B5E",
+    "destinationHost" : "192.168.3.12",
+    "destinationPort" : 3030,
+    "oscPatch" : 2,
+    "createCueList" : false,
+    "usePreWait" : true,
+    "autoContinue" : true,
+    "timeScale" : 1.0,
+    "cueType" : "osc"
+  }
+  
