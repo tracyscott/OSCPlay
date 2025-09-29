@@ -200,7 +200,7 @@ public class QLab2OSCConverter {
     /**
      * Create a Network OSC cue for a single OSC message
      */
-    private void createNetworkOSCCue(OSCMessageRecord message, int cueNumber, double preWait, String cueListId) throws IOException, OSCSerializeException {
+    private void createNetworkOSCCue(OSCMessageRecord message, int cueNumber, double preWait) throws IOException, OSCSerializeException {
         // Create new cue (OSC or memo based on config)
         String cueType = config.getCueType();
         if ("osc".equals(cueType)) {
@@ -209,15 +209,10 @@ public class QLab2OSCConverter {
         
         // Create new cue as child of the selected cue list
         String newCueAddress;
-        if (config.isCreateCueList() && cueListId != null) {
-            // Create child cue in the selected cue list
-            newCueAddress = getWorkspacePrefix() + "/new_child";
-            System.out.println("  → Sending: " + newCueAddress + " [\"" + cueType + "\"] (as child)");
-        } else {
-            // Create normal cue
-            newCueAddress = getWorkspacePrefix() + "/new";
-            System.out.println("  → Sending: " + newCueAddress + " [\"" + cueType + "\"]");
-        }
+        
+        // Create normal cue
+        newCueAddress = getWorkspacePrefix() + "/new";
+        System.out.println("  → Sending: " + newCueAddress + " [\"" + cueType + "\"]");
         OSCMessage newCueMsg = new OSCMessage(newCueAddress, List.of(cueType));
         qlabOutput.send(newCueMsg);
         
