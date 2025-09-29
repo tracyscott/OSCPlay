@@ -37,6 +37,7 @@ import xyz.theforks.service.OSCInputService;
 import xyz.theforks.service.OSCOutputService;
 import xyz.theforks.service.OSCProxyService;
 import xyz.theforks.ui.Theme;
+import xyz.theforks.util.DataDirectory;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.File;
@@ -79,7 +80,6 @@ public class OSCProxyApp extends Application {
     // Application configuration
     private ApplicationConfig appConfig;
     private final ObjectMapper configMapper = new ObjectMapper();
-    private final String APP_CONFIG_FILE = "app_config.json";
 
     private boolean isRecording = false;
 
@@ -615,7 +615,7 @@ public class OSCProxyApp extends Application {
      */
     private void loadApplicationConfig() {
         try {
-            File configFile = new File(APP_CONFIG_FILE);
+            File configFile = DataDirectory.getConfigFile("app_config.json").toFile();
             if (configFile.exists()) {
                 appConfig = configMapper.readValue(configFile, ApplicationConfig.class);
             } else {
@@ -627,13 +627,13 @@ public class OSCProxyApp extends Application {
             appConfig = new ApplicationConfig(); // Use defaults
         }
     }
-    
+
     /**
      * Save application configuration to file.
      */
     private void saveApplicationConfig() {
         try {
-            configMapper.writeValue(new File(APP_CONFIG_FILE), appConfig);
+            configMapper.writeValue(DataDirectory.getConfigFile("app_config.json").toFile(), appConfig);
         } catch (Exception e) {
             System.err.println("Error saving application config: " + e.getMessage());
         }

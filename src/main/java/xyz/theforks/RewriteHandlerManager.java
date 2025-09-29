@@ -33,6 +33,7 @@ import xyz.theforks.rewrite.RewriteHandler;
 import xyz.theforks.rewrite.RewriteRegistry;
 import xyz.theforks.service.OSCProxyService;
 import xyz.theforks.ui.Theme;
+import xyz.theforks.util.DataDirectory;
 
 public class RewriteHandlerManager {
     private final OSCProxyService proxyService;
@@ -372,8 +373,8 @@ public class RewriteHandlerManager {
     private void saveLastConfig(String filename) {
         JsonObject config = new JsonObject();
         config.addProperty("lastConfig", filename);
-        
-        try (FileWriter writer = new FileWriter("config.json")) {
+
+        try (FileWriter writer = new FileWriter(DataDirectory.getConfigFile("config.json").toFile())) {
             new Gson().toJson(config, writer);
         } catch (IOException ex) {
             System.err.println("Could not save config.json: " + ex.getMessage());
@@ -382,7 +383,7 @@ public class RewriteHandlerManager {
 
     private void loadLastConfig() {
         try {
-            File configFile = new File("config.json");
+            File configFile = DataDirectory.getConfigFile("config.json").toFile();
             if (configFile.exists()) {
                 JsonObject config = new Gson().fromJson(new FileReader(configFile), JsonObject.class);
                 String lastConfig = config.get("lastConfig").getAsString();

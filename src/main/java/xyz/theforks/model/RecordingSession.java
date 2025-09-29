@@ -9,13 +9,13 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import xyz.theforks.util.DataDirectory;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class RecordingSession {
     private String name;
     private List<OSCMessageRecord> messages;
     private long startTime;
-    static private final String RECORDINGS_DIR = "recordings";
 
     // Default constructor for Jackson
     public RecordingSession() {
@@ -53,13 +53,9 @@ public class RecordingSession {
     public void setStartTime(long startTime) { this.startTime = startTime; }
 
     static public RecordingSession loadSession(String sessionName) throws IOException {
-        return loadSession(sessionName, RECORDINGS_DIR);
-    }
-
-    static public RecordingSession loadSession(String sessionName, String recordingsDir) throws IOException {
         final ObjectMapper objectMapper = new ObjectMapper();
 
-        File file = new File(recordingsDir, sessionName + ".json");
+        File file = DataDirectory.getRecordingFile(sessionName + ".json").toFile();
         if (!file.exists()) {
             System.err.println("Recording file not found: " + file.getAbsolutePath());
             return null;

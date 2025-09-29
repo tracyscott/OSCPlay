@@ -17,6 +17,7 @@ import xyz.theforks.model.RecordingSession;
 import xyz.theforks.model.RecordingMode;
 import xyz.theforks.rewrite.RewriteEngine;
 import xyz.theforks.rewrite.RewriteHandler;
+import xyz.theforks.util.DataDirectory;
 
 public class OSCProxyService {
 
@@ -26,7 +27,6 @@ public class OSCProxyService {
     private boolean isRecording = false;
     private RecordingMode recordingMode = RecordingMode.PRE_REWRITE;
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private String recordingsDir = "recordings";
     private final IntegerProperty messageCount = new SimpleIntegerProperty(0);
     private final RewriteEngine rewriteEngine;
 
@@ -40,8 +40,8 @@ public class OSCProxyService {
         });
         outputService = new OSCOutputService();
         rewriteEngine = new RewriteEngine(RewriteEngine.Context.PROXY);
-    
-        createDirectories();
+
+        DataDirectory.createDirectories();
     }
 
     public OSCInputService getInputService() {
@@ -52,9 +52,6 @@ public class OSCProxyService {
         return outputService;
     }
 
-    private void createDirectories() {
-        new File(recordingsDir).mkdirs();
-    }
 
     public IntegerProperty messageCountProperty() {
         return messageCount;
@@ -142,7 +139,7 @@ public class OSCProxyService {
 
     private void saveSession(RecordingSession session) {
         try {
-            File dir = new File(recordingsDir);
+            File dir = DataDirectory.getRecordingsDirFile();
             if (!dir.exists()) {
                 dir.mkdirs();
             }
@@ -157,7 +154,7 @@ public class OSCProxyService {
 
     public List<String> getRecordedSessions() {
         List<String> sessions = new ArrayList<>();
-        File dir = new File(recordingsDir);
+        File dir = DataDirectory.getRecordingsDirFile();
         if (dir.exists()) {
             File[] files = dir.listFiles((d, name) -> name.endsWith(".json"));
             if (files != null) {
@@ -169,13 +166,8 @@ public class OSCProxyService {
         return sessions;
     }
 
-    public void setRecordingsDir(String recordingsDir) {
-        this.recordingsDir = recordingsDir;
-        createDirectories();
-    }
-
     public String getRecordingsDir() {
-        return recordingsDir;
+        return DataDirectory.getRecordingsDir().toString();
     }
     
     /**

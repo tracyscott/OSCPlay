@@ -26,6 +26,7 @@ import xyz.theforks.model.SessionMetadata;
 import xyz.theforks.rewrite.RewriteEngine;
 import xyz.theforks.rewrite.RewriteHandler;
 import xyz.theforks.service.OSCOutputService;
+import xyz.theforks.util.DataDirectory;
 
 /**
  * Encapsulates the playback of a recorded session.  For mult-trigger, there will be multiple instances
@@ -40,9 +41,6 @@ public class Playback {
     private Thread playbackThread;
     private String playbackHost = "127.0.0.1";
     private int playbackPort = 9000;
-    private final String AUDIO_DIR = "audio";
-    private final String CONFIG_FILE = "session_config.json";
-    private final String RECORDINGS_DIR = "recordings";
     private SessionConfig sessionConfig;
     private MediaPlayer mediaPlayer;
     private boolean mediaReady = false;
@@ -52,19 +50,14 @@ public class Playback {
     private final RewriteEngine rewriteEngine;
 
     public Playback() {
+        DataDirectory.createDirectories();
         loadSessionConfig();
-        createDirectories();
         rewriteEngine = new RewriteEngine(RewriteEngine.Context.PLAYBACK);
-    }
-
-     private void createDirectories() {
-        new File(RECORDINGS_DIR).mkdirs();
-        new File(AUDIO_DIR).mkdirs();
     }
 
     private void loadSessionConfig() {
         try {
-            File configFile = new File(CONFIG_FILE);
+            File configFile = DataDirectory.getConfigFile("session_config.json").toFile();
             if (configFile.exists()) {
                 sessionConfig = objectMapper.readValue(configFile, SessionConfig.class);
             } else {
@@ -78,7 +71,7 @@ public class Playback {
 
     private void saveSessionConfig() {
         try {
-            objectMapper.writeValue(new File(CONFIG_FILE), sessionConfig);
+            objectMapper.writeValue(DataDirectory.getConfigFile("session_config.json").toFile(), sessionConfig);
         } catch (Exception e) {
             System.err.println("Error saving session config: " + e.getMessage());
         }
@@ -87,7 +80,7 @@ public class Playback {
     public void associateAudioFile(String sessionName, File audioFile) {
         try {
             // Copy or move audio file to audio directory if it's not already there
-            Path targetPath = Paths.get(AUDIO_DIR, audioFile.getName());
+            Path targetPath = DataDirectory.getAudioFile(audioFile.getName());
             if (!audioFile.getAbsolutePath().equals(targetPath.toAbsolutePath().toString())) {
                 java.nio.file.Files.copy(
                         audioFile.toPath(),
@@ -126,7 +119,7 @@ public class Playback {
 
     public void playSession(String sessionName) {
         try {
-            File file = new File(RECORDINGS_DIR, sessionName + ".json");
+            File file = DataDirectory.getRecordingFile(sessionName + ".json").toFile();
             if (!file.exists()) {
                 System.err.println("Recording file not found: " + file.getAbsolutePath());
                 return;
@@ -173,7 +166,7 @@ public class Playback {
                             // we have no other way of knowing when to start the audio.
                             String audioFileName = getAssociatedAudioFile(sessionName);
                             if (audioFileName != null) {
-                                File audioFile = new File(AUDIO_DIR, audioFileName);
+                                File audioFile = DataDirectory.getAudioFile(audioFileName).toFile();
                                 if (audioFile.exists()) {
                                     Media media = new Media(audioFile.toURI().toString());
                                     mediaPlayer = new MediaPlayer(media);
