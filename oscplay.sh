@@ -39,7 +39,8 @@ echo "Starting OSCPlay GUI..."
 echo "Using JAR: $JAR_FILE"
 echo "Using JavaFX SDK: $JFX_SDK"
 
-java --module-path "$JFX_SDK" \
+java -Xdock:icon="icons/oscplay.icns" \
+     --module-path "$JFX_SDK" \
      --add-modules javafx.controls,javafx.fxml,javafx.media \
      --add-exports javafx.base/com.sun.javafx=ALL-UNNAMED \
      --add-exports javafx.graphics/com.sun.javafx.util=ALL-UNNAMED \

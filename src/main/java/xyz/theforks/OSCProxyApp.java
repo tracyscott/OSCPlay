@@ -15,6 +15,8 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressBar;
 import javafx.scene.control.RadioButton;
+import javafx.scene.control.Tab;
+import javafx.scene.control.TabPane;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TextInputDialog;
@@ -36,6 +38,7 @@ import xyz.theforks.model.RecordingMode;
 import xyz.theforks.service.OSCInputService;
 import xyz.theforks.service.OSCOutputService;
 import xyz.theforks.service.OSCProxyService;
+import xyz.theforks.ui.SamplerPadUI;
 import xyz.theforks.ui.Theme;
 import xyz.theforks.util.DataDirectory;
 
@@ -189,13 +192,13 @@ public class OSCProxyApp extends Application {
         
         // Control buttons - Enable Proxy comes before rewrite handlers
         proxyToggleButton = new ToggleButton("Enable Proxy");
-        proxyToggleButton.setSelected(false);
+        proxyToggleButton.setSelected(true);
         proxyToggleButton.setMinWidth(120);
         proxyGrid.add(proxyToggleButton, 0, 2, GridPane.REMAINING, 1);
 
         // Rewrite handlers section (below proxy toggle)
         handlerManager = new RewriteHandlerManager(proxyService, logArea, statusBar);
-        handlerManager.createUI(proxyGrid);
+        handlerManager.createUI(proxyGrid, 4);
         
         // Connect the playback instance to the handler manager for synchronization
         handlerManager.setPlayback(playback);
@@ -210,8 +213,12 @@ public class OSCProxyApp extends Application {
         proxyGrid.getColumnConstraints().addAll(col0, col1, col2);
 
         TitledPane proxyPane = new TitledPane("Proxy", proxyGrid);
-        proxyPane.setCollapsible(false);
+        proxyPane.setCollapsible(true);
         grid.add(proxyPane, 0, 0, GridPane.REMAINING, 1);
+
+        // Create TabPane for Record/Playback and Sampler
+        TabPane tabPane = new TabPane();
+        tabPane.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
 
         // Recording controls
         VBox recordingSection = new VBox(5);
@@ -219,7 +226,7 @@ public class OSCProxyApp extends Application {
         recordButton = new Button("Start Recording");
         messageCountLabel = new Label("Messages: 0");
         recordingControls.getChildren().addAll(recordButton, messageCountLabel);
-        
+
         // Recording mode controls
         HBox recordingModeControls = new HBox(10);
         Label recordingModeLabel = new Label("Recording mode:");
@@ -230,7 +237,7 @@ public class OSCProxyApp extends Application {
         postRewriteRadio.setToggleGroup(recordingModeGroup);
         preRewriteRadio.setSelected(true); // Default to PRE_REWRITE
         recordingModeControls.getChildren().addAll(recordingModeLabel, preRewriteRadio, postRewriteRadio);
-        
+
         recordingSection.getChildren().addAll(recordingControls, recordingModeControls);
 
         // Playback controls
@@ -244,7 +251,7 @@ public class OSCProxyApp extends Application {
         stopPlaybackButton = new Button("Stop");
         stopPlaybackButton.setDisable(true);
         manageButton = new Button("Manage");
-        
+
 
         sessionControls.getChildren().addAll(
                 new Label("Recordings:"),
@@ -264,13 +271,13 @@ public class OSCProxyApp extends Application {
         selectAudioButton = new Button("Select Audio File");
         audioFileLabel = new Label("No Audio");
         audioControls.getChildren().addAll(selectAudioButton, audioFileLabel);
-        
+
         // Playback mode controls
         HBox playbackModeControls = new HBox(10);
         playbackRewriteCheckBox = new CheckBox("Apply rewrite handlers during playback");
         playbackRewriteCheckBox.setSelected(false); // Default to WITHOUT_REWRITE
         playbackModeControls.getChildren().add(playbackRewriteCheckBox);
-        
+
         playbackControls.getChildren().addAll(
                 sessionControls,
                 playbackProgress,
@@ -279,12 +286,21 @@ public class OSCProxyApp extends Application {
                 playbackModeControls
         );
 
-        // Group Record/Playback into titled panel
+        // Create Record/Playback tab content
         VBox recordPlaybackBox = new VBox(10);
+        recordPlaybackBox.setPadding(new Insets(10));
         recordPlaybackBox.getChildren().addAll(recordingSection, playbackControls);
-        TitledPane recordPlaybackPane = new TitledPane("Record / Playback", recordPlaybackBox);
-        recordPlaybackPane.setCollapsible(false);
-        grid.add(recordPlaybackPane, 0, 1, GridPane.REMAINING, 1);
+
+        Tab recordPlaybackTab = new Tab("Record / Playback", recordPlaybackBox);
+
+        // Create Sampler tab content
+        SamplerPadUI samplerPadUI = new SamplerPadUI(proxyService, playback, logArea);
+        Tab samplerTab = new Tab("Sampler", samplerPadUI);
+
+        // Add tabs to TabPane
+        tabPane.getTabs().addAll(recordPlaybackTab, samplerTab);
+
+        grid.add(tabPane, 0, 1, GridPane.REMAINING, 1);
 
        
        // Sampler pads
@@ -313,11 +329,14 @@ public class OSCProxyApp extends Application {
         statusBar.getStyleClass().add("status-bar");
         grid.add(statusBar, 0, 3, GridPane.REMAINING, 1);
 
-        // Load the icon image
-        Image icon = new Image(getClass().getResourceAsStream("/oscplayicon.png"));
-
-        // Set the icon on the primary stage
-        primaryStage.getIcons().add(icon);
+        primaryStage.getIcons().addAll(
+            new Image(getClass().getResourceAsStream("/icons/oscplay-16x16.png")),
+            new Image(getClass().getResourceAsStream("/icons/oscplay-32x32.png")),
+            new Image(getClass().getResourceAsStream("/icons/oscplay-48x48.png")),
+            new Image(getClass().getResourceAsStream("/icons/oscplay-64x64.png")),
+            new Image(getClass().getResourceAsStream("/icons/oscplay-128x128.png")),
+            new Image(getClass().getResourceAsStream("/icons/oscplay-256x256.png"))
+        );
 
         primaryStage.setResizable(true);
         primaryStage.setMinWidth(500);
@@ -395,6 +414,21 @@ public class OSCProxyApp extends Application {
 
         // Update sessions list
         updateSessionsList();
+
+        // Start proxy by default since toggle is selected
+        try {
+            proxyService.setInHost(inHostField.getText());
+            proxyService.setInPort(Integer.parseInt(inPortField.getText()));
+            proxyService.setOutHost(outHostField.getText());
+            proxyService.setOutPort(Integer.parseInt(outPortField.getText()));
+            proxyService.startProxy();
+            proxyToggleButton.setText("Disable Proxy");
+            log("Proxy started automatically");
+        } catch (Exception ex) {
+            showError("Error starting proxy", ex.getMessage());
+            log("Error: " + ex.getMessage());
+            proxyToggleButton.setSelected(false);
+        }
     }
 
     private void setupEventHandlers() {
@@ -558,10 +592,93 @@ public class OSCProxyApp extends Application {
         outHostField.setOnMouseExited(e -> 
             statusBar.setText(""));
 
-        outPortField.setOnMouseEntered(e -> 
+        outPortField.setOnMouseEntered(e ->
             statusBar.setText("Output Port: " + outPortField.getText()));
-        outPortField.setOnMouseExited(e -> 
+        outPortField.setOnMouseExited(e ->
             statusBar.setText(""));
+
+        // Add visual feedback for field editing
+        setupFieldEditFeedback(inHostField);
+        setupFieldEditFeedback(inPortField);
+        setupFieldEditFeedback(outHostField);
+        setupFieldEditFeedback(outPortField);
+    }
+
+    /**
+     * Sets up visual feedback for a text field - changes border color when edited
+     * and reverts to default when Enter is pressed.
+     */
+    private void setupFieldEditFeedback(TextField field) {
+        final String defaultStyle = field.getStyle();
+        final String editedStyle = defaultStyle + " -fx-border-color: #FFA500; -fx-border-width: 2px;";
+
+        field.textProperty().addListener((obs, oldVal, newVal) -> {
+            if (!field.getStyle().contains("-fx-border-color")) {
+                field.setStyle(editedStyle);
+            }
+        });
+
+        field.setOnKeyPressed(e -> {
+            if (e.getCode() == javafx.scene.input.KeyCode.ENTER) {
+                // Always attempt to restart proxy for proxy config fields, regardless of toggle state
+                // This allows recovery from error states
+                if (field == inHostField || field == inPortField ||
+                    field == outHostField || field == outPortField) {
+                    restartProxyWithNewSettings(field);
+                } else {
+                    field.setStyle(defaultStyle);
+                }
+            }
+        });
+    }
+
+    /**
+     * Restarts the proxy with new settings from the input fields.
+     * Shows error indication on the field if restart fails.
+     */
+    private void restartProxyWithNewSettings(TextField changedField) {
+        final String baseStyle = "-fx-font-size: 11px;";
+        final String errorStyle = baseStyle + " -fx-border-color: #FF0000; -fx-border-width: 2px;";
+
+        try {
+            // Stop the current proxy (safe to call even if not running)
+            proxyService.stopProxy();
+
+            // Update settings and restart
+            proxyService.setInHost(inHostField.getText());
+            proxyService.setInPort(Integer.parseInt(inPortField.getText()));
+            proxyService.setOutHost(outHostField.getText());
+            proxyService.setOutPort(Integer.parseInt(outPortField.getText()));
+            proxyService.startProxy();
+
+            log("Proxy started with settings - In: " + inHostField.getText() + ":" +
+                inPortField.getText() + " Out: " + outHostField.getText() + ":" + outPortField.getText());
+
+            // Clear any error styling on all proxy fields
+            inHostField.setStyle(baseStyle);
+            inPortField.setStyle(baseStyle);
+            outHostField.setStyle(baseStyle);
+            outPortField.setStyle(baseStyle);
+
+            // Update toggle button to reflect running state
+            proxyToggleButton.setSelected(true);
+            proxyToggleButton.setText("Disable Proxy");
+            statusBar.setText("");
+        } catch (NumberFormatException ex) {
+            String errorMsg = "Invalid port number: " + changedField.getText();
+            log("ERROR: " + errorMsg);
+            statusBar.setText(errorMsg);
+            changedField.setStyle(errorStyle);
+            proxyToggleButton.setSelected(false);
+            proxyToggleButton.setText("Enable Proxy");
+        } catch (Exception ex) {
+            String errorMsg = "Failed to start proxy: " + ex.getMessage();
+            log("ERROR: " + errorMsg);
+            statusBar.setText(errorMsg);
+            changedField.setStyle(errorStyle);
+            proxyToggleButton.setSelected(false);
+            proxyToggleButton.setText("Enable Proxy");
+        }
     }
 
     private void updatePlaybackStatus(double progress) {

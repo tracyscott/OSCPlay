@@ -65,23 +65,25 @@ public class RewriteHandlerManager {
         }
     }
 
-    public void createUI(GridPane grid) {
+    public void createUI(GridPane grid, int startRow) {
         // Rewrite handlers section
         handlersLabel = new Label("Rewrite Handler Config:");
-        grid.add(handlersLabel, 0, 4, GridPane.REMAINING, 1);  // Modified to span all columns
+        grid.add(handlersLabel, 0, startRow, GridPane.REMAINING, 1);  // Modified to span all columns
 
-        handlersListView = new ListView<>(activeHandlers);
-        handlersListView.setPrefHeight(150);
-        setupHandlersListView();
-        
-        GridPane.setHgrow(handlersListView, Priority.ALWAYS);
-        grid.add(handlersListView, 0, 5, GridPane.REMAINING, 1);
-
-        // Handler management buttons across multiple columns
+        // Handler management buttons on their own row below the list
         HBox handlerButtons = new HBox(10);
         setupHandlerButtons(handlerButtons);
         GridPane.setHgrow(handlerButtons, Priority.ALWAYS);
-        grid.add(handlerButtons, 0, 6, GridPane.REMAINING, 1); // Span all columns
+        grid.add(handlerButtons, 0, startRow + 1, GridPane.REMAINING, 1); // Span all columns
+
+        handlersListView = new ListView<>(activeHandlers);
+        handlersListView.setMinHeight(150);
+        handlersListView.setMaxHeight(Double.MAX_VALUE);
+        setupHandlersListView();
+
+        GridPane.setHgrow(handlersListView, Priority.ALWAYS);
+        GridPane.setVgrow(handlersListView, Priority.ALWAYS);
+        grid.add(handlersListView, 0, startRow + 2, GridPane.REMAINING, 4);  // Span 4 rows
 
         loadLastConfig();
     }
@@ -124,6 +126,17 @@ public class RewriteHandlerManager {
         // Cell implementation moved from OSCProxyApp
         enabledCheck.setSelected(true);
 
+        // Add event handler for checkbox to enable/disable handler
+        enabledCheck.setOnAction(e -> {
+            if (enabledCheck.isSelected()) {
+                proxyService.registerRewriteHandler(handler);
+                log("Enabled " + handler.label());
+            } else {
+                proxyService.unregisterRewriteHandler(handler);
+                log("Disabled " + handler.label());
+            }
+        });
+
         nameLabel.setPrefWidth(150);
 
         // Args setup
@@ -132,23 +145,25 @@ public class RewriteHandlerManager {
         String[] argNames = handler.getArgNames();
         for (int i = 0; i < handler.getNumArgs(); i++) {
             TextField field = new TextField();
-            field.setPrefWidth(120);
+            field.setPrefWidth(100);
+            field.setMaxWidth(100);
             if (i < currentArgs.length && currentArgs[i] != null) {
                 field.setText(currentArgs[i]);
                 field.setStyle("-fx-font-size: 11px;");
             }
-            
+
             // Updated hover handlers to use argument names
             final int argIndex = i;
-            field.setOnMouseEntered(e -> 
-                statusBar.setText(String.format("%s: %s = %s", 
+            field.setOnMouseEntered(e ->
+                statusBar.setText(String.format("%s: %s = %s",
                     handler.label(), argNames[argIndex], field.getText())));
-            field.setOnMouseExited(e -> 
+            field.setOnMouseExited(e ->
                 statusBar.setText(""));
-                
+
             argFields[i] = field;
             argsBox.getChildren().add(field);
         }
+        argsBox.setMaxWidth(450);
 
         // Existing buttons
         // Update button handler:
@@ -251,8 +266,10 @@ public class RewriteHandlerManager {
                 fileChooser.getExtensionFilters().add(
                     new FileChooser.ExtensionFilter("JSON Files", "*.json")
                 );
+                // Set initial directory to config directory
+                fileChooser.setInitialDirectory(DataDirectory.getConfigDirFile());
             }
-            
+
             File file = fileChooser.showOpenDialog(null);
             if (file != null) {
                 loadConfig(file.getAbsolutePath());
@@ -333,8 +350,10 @@ public class RewriteHandlerManager {
             fileChooser.getExtensionFilters().add(
                 new FileChooser.ExtensionFilter("JSON Files", "*.json")
             );
+            // Set initial directory to config directory
+            fileChooser.setInitialDirectory(DataDirectory.getConfigDirFile());
         }
-        
+
         File file = fileChooser.showSaveDialog(null);
         if (file != null) {
             currentConfigFile = file.getAbsolutePath();
@@ -385,49 +404,79 @@ public class RewriteHandlerManager {
         try {
             File configFile = DataDirectory.getConfigFile("config.json").toFile();
             if (configFile.exists()) {
+                log("Found config.json, attempting to load last configuration");
                 JsonObject config = new Gson().fromJson(new FileReader(configFile), JsonObject.class);
                 String lastConfig = config.get("lastConfig").getAsString();
-                loadConfig(lastConfig);
+                if (lastConfig != null && !lastConfig.isEmpty()) {
+                    log("Last config file: " + lastConfig);
+                    loadConfig(lastConfig);
+                } else {
+                    log("No last config file specified in config.json");
+                }
+            } else {
+                log("No config.json found, skipping auto-load");
             }
-        } catch (IOException ex) {
+        } catch (Exception ex) {
+            log("Could not load last config: " + ex.getMessage());
             System.err.println("Could not load config.json: " + ex.getMessage());
+            ex.printStackTrace();
         }
     }
 
     private void loadConfig(String filename) {
         try {
-            JsonArray handlersArray = new Gson().fromJson(new FileReader(filename), JsonArray.class);
+            log("Loading configuration from: " + filename);
+
+            // Check if file exists
+            File configFile = new File(filename);
+            if (!configFile.exists()) {
+                throw new Exception("File does not exist: " + filename);
+            }
+
+            log("File exists, attempting to parse JSON");
+            JsonArray handlersArray = new Gson().fromJson(new FileReader(configFile), JsonArray.class);
             activeHandlers.clear();
-            
+
+            log("Found " + handlersArray.size() + " handlers in config");
+
             for (JsonElement elem : handlersArray) {
                 JsonObject handlerObj = elem.getAsJsonObject();
                 String type = handlerObj.get("type").getAsString();
                 boolean enabled = handlerObj.get("enabled").getAsBoolean();
-                
+
+                log("Loading handler: " + type + " (enabled: " + enabled + ")");
+
                 // Load handler arguments
                 JsonArray argsArray = handlerObj.getAsJsonArray("args");
                 String[] args = new String[argsArray.size()];
                 for (int i = 0; i < args.length; i++) {
                     args[i] = argsArray.get(i).getAsString();
                 }
-                
+
                 Class<?> handlerClass = Class.forName(type);
                 RewriteHandler handler = (RewriteHandler)handlerClass.getDeclaredConstructor().newInstance();
-                
+
                 if (!handler.configure(args)) {
                     throw new Exception("Failed to configure handler with saved arguments");
                 }
-                
+
                 activeHandlers.add(handler);
+                log("Added handler to activeHandlers list: " + handler.label());
+
                 if (enabled) {
                     proxyService.registerRewriteHandler(handler);
+                    log("Registered handler with proxy service: " + handler.label());
                 }
             }
-            
+
             currentConfigFile = filename;
             updateHandlersLabel();
+            log("Configuration loaded successfully. Active handlers count: " + activeHandlers.size());
         } catch (Exception ex) {
-            showError("Load Error", "Could not load configuration: " + ex.getMessage());
+            String errorMsg = "Could not load configuration from: " + filename + "\nError: " + ex.getMessage();
+            log("Error loading configuration: " + errorMsg);
+            ex.printStackTrace();
+            showError("Load Error", errorMsg);
         }
     }
 
