@@ -68,12 +68,40 @@ public class DataDirectory {
     }
 
     /**
-     * Get a file path within the recordings directory.
-     * @param filename The filename
-     * @return Path to the file in recordings directory
+     * Get a session directory path within the recordings directory.
+     * @param sessionName The session name
+     * @return Path to the session directory
      */
-    public static Path getRecordingFile(String filename) {
-        return getRecordingsDir().resolve(filename);
+    public static Path getSessionDir(String sessionName) {
+        return getRecordingsDir().resolve(sessionName);
+    }
+
+    /**
+     * Get a file path within a session's directory.
+     * @param sessionName The session name
+     * @param filename The filename
+     * @return Path to the file in the session directory
+     */
+    public static Path getSessionFile(String sessionName, String filename) {
+        return getSessionDir(sessionName).resolve(filename);
+    }
+
+    /**
+     * Get the session data file (JSON) path.
+     * @param sessionName The session name
+     * @return Path to the session's data.json file
+     */
+    public static Path getSessionDataFile(String sessionName) {
+        return getSessionFile(sessionName, "data.json");
+    }
+
+    /**
+     * Get the session settings file path.
+     * @param sessionName The session name
+     * @return Path to the session's settings.json file
+     */
+    public static Path getSessionSettingsFile(String sessionName) {
+        return getSessionFile(sessionName, "settings.json");
     }
 
     /**

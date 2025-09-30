@@ -112,9 +112,8 @@ class RecordingSessionTest {
 
     @Test
     void testLoadSessionNonExistentFile() throws IOException {
-        // This will look for nonexistent.json in temp recordings dir which won't exist
-        String testRecordingsDir = tempDir.resolve("recordings").toString();
-        RecordingSession session = RecordingSession.loadSession("nonexistent", testRecordingsDir);
+        // This will look for nonexistent.json in the default recordings dir which won't exist
+        RecordingSession session = RecordingSession.loadSession("nonexistent");
         assertNull(session);
     }
 
@@ -151,5 +150,27 @@ class RecordingSessionTest {
         // Check each argument with type conversion handling
         assertEquals(((Float) originalArgs[0]).doubleValue(), ((Double) deserializedArgs[0]).doubleValue(), 0.001);
         assertEquals(originalArgs[1], deserializedArgs[1]); // String should be unchanged
+    }
+
+    @Test
+    void testSaveAndLoadSettings() throws IOException {
+        String sessionName = "settings-test";
+        String audioFileName = "test-audio.wav";
+
+        // Create and save settings
+        RecordingSession session = new RecordingSession(sessionName);
+        SessionSettings settings = new SessionSettings(audioFileName);
+        session.saveSettings(settings);
+
+        // Load settings back
+        SessionSettings loadedSettings = RecordingSession.loadSettings(sessionName);
+        assertNotNull(loadedSettings);
+        assertEquals(audioFileName, loadedSettings.getAudioFileName());
+    }
+
+    @Test
+    void testLoadSettingsNonExistent() throws IOException {
+        SessionSettings settings = RecordingSession.loadSettings("nonexistent-session");
+        assertNull(settings);
     }
 }

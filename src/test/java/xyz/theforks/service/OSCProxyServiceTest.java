@@ -20,9 +20,8 @@ class OSCProxyServiceTest {
 
     @BeforeEach
     void setUp() {
-        // Set up proxy service with temporary recordings directory
+        // Set up proxy service (uses DataDirectory for recordings)
         proxyService = new OSCProxyService();
-        proxyService.setRecordingsDir(tempDir.resolve("recordings").toString());
     }
 
     @Test
@@ -59,17 +58,26 @@ class OSCProxyServiceTest {
 
     @Test
     void testGetRecordedSessionsEmptyDirectory() {
-        // Clear any existing files first
+        // Clear any existing files and directories first
         File recordingsDir = new File(proxyService.getRecordingsDir());
         if (recordingsDir.exists()) {
-            File[] files = recordingsDir.listFiles();
-            if (files != null) {
-                for (File file : files) {
-                    file.delete();
+            File[] entries = recordingsDir.listFiles();
+            if (entries != null) {
+                for (File entry : entries) {
+                    if (entry.isDirectory()) {
+                        // Delete directory contents
+                        File[] subFiles = entry.listFiles();
+                        if (subFiles != null) {
+                            for (File subFile : subFiles) {
+                                subFile.delete();
+                            }
+                        }
+                    }
+                    entry.delete();
                 }
             }
         }
-        
+
         List<String> sessions = proxyService.getRecordedSessions();
         assertNotNull(sessions);
         assertTrue(sessions.isEmpty());
@@ -83,42 +91,66 @@ class OSCProxyServiceTest {
             File[] files = recordingsDir.listFiles();
             if (files != null) {
                 for (File file : files) {
+                    if (file.isDirectory()) {
+                        // Delete directory contents
+                        File[] subFiles = file.listFiles();
+                        if (subFiles != null) {
+                            for (File subFile : subFiles) {
+                                subFile.delete();
+                            }
+                        }
+                    }
                     file.delete();
                 }
             }
         }
         recordingsDir.mkdirs();
-        
-        // Create some test session files
-        Files.createFile(recordingsDir.toPath().resolve("session1.json"));
-        Files.createFile(recordingsDir.toPath().resolve("session2.json"));
+
+        // Create some test session directories with data.json
+        File session1Dir = recordingsDir.toPath().resolve("session1").toFile();
+        session1Dir.mkdirs();
+        Files.createFile(session1Dir.toPath().resolve("data.json"));
+
+        File session2Dir = recordingsDir.toPath().resolve("session2").toFile();
+        session2Dir.mkdirs();
+        Files.createFile(session2Dir.toPath().resolve("data.json"));
+
+        // Create a directory without data.json - should be ignored
+        File invalidDir = recordingsDir.toPath().resolve("invalid-session").toFile();
+        invalidDir.mkdirs();
+
         Files.createFile(recordingsDir.toPath().resolve("not-a-session.txt")); // Should be ignored
-        
+
         List<String> sessions = proxyService.getRecordedSessions();
         assertNotNull(sessions);
         assertEquals(2, sessions.size());
         assertTrue(sessions.contains("session1"));
         assertTrue(sessions.contains("session2"));
+        assertFalse(sessions.contains("invalid-session"));
         assertFalse(sessions.contains("not-a-session"));
     }
 
     @Test
     void testStartAndStopRecording() throws IOException {
         String sessionName = "test-recording";
-        
+
         // Start recording
         proxyService.startRecording(sessionName);
-        
+
         // Verify recording state
         assertEquals(0, proxyService.messageCountProperty().get());
-        
+
         // Stop recording
         proxyService.stopRecording();
-        
-        // Verify session file was created
-        File sessionFile = new File(proxyService.getRecordingsDir(), sessionName + ".json");
-        assertTrue(sessionFile.exists());
-        
+
+        // Verify session directory and data file were created (new structure)
+        File sessionDir = new File(proxyService.getRecordingsDir(), sessionName);
+        assertTrue(sessionDir.exists());
+        assertTrue(sessionDir.isDirectory());
+
+        File dataFile = new File(sessionDir, "data.json");
+        assertTrue(dataFile.exists());
+
         // Verify it appears in the sessions list
         List<String> sessions = proxyService.getRecordedSessions();
         assertTrue(sessions.contains(sessionName));
@@ -132,28 +164,37 @@ class OSCProxyServiceTest {
 
     @Test
     void testMultipleRecordingSessions() throws IOException {
-        // Clear existing files first
+        // Clear existing files and directories first
         File recordingsDir = new File(proxyService.getRecordingsDir());
         if (recordingsDir.exists()) {
-            File[] files = recordingsDir.listFiles();
-            if (files != null) {
-                for (File file : files) {
-                    file.delete();
+            File[] entries = recordingsDir.listFiles();
+            if (entries != null) {
+                for (File entry : entries) {
+                    if (entry.isDirectory()) {
+                        // Delete directory contents
+                        File[] subFiles = entry.listFiles();
+                        if (subFiles != null) {
+                            for (File subFile : subFiles) {
+                                subFile.delete();
+                            }
+                        }
+                    }
+                    entry.delete();
                 }
             }
         }
-        
+
         String session1 = "recording1";
         String session2 = "recording2";
-        
+
         // Record first session
         proxyService.startRecording(session1);
         proxyService.stopRecording();
-        
+
         // Record second session
         proxyService.startRecording(session2);
         proxyService.stopRecording();
-        
+
         // Verify both sessions exist
         List<String> sessions = proxyService.getRecordedSessions();
         assertTrue(sessions.contains(session1));
@@ -164,28 +205,29 @@ class OSCProxyServiceTest {
     @Test
     void testRecordingOverwritesPrevious() throws IOException {
         String sessionName = "overwrite-test";
-        
+
         // Create first recording
         proxyService.startRecording(sessionName);
         proxyService.stopRecording();
-        
-        File sessionFile = new File(proxyService.getRecordingsDir(), sessionName + ".json");
-        long firstModified = sessionFile.lastModified();
-        
+
+        File sessionDir = new File(proxyService.getRecordingsDir(), sessionName);
+        File dataFile = new File(sessionDir, "data.json");
+        long firstModified = dataFile.lastModified();
+
         // Wait a bit to ensure timestamp difference
         try {
             Thread.sleep(10);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
-        
+
         // Create second recording with same name
         proxyService.startRecording(sessionName);
         proxyService.stopRecording();
-        
-        long secondModified = sessionFile.lastModified();
+
+        long secondModified = dataFile.lastModified();
         assertTrue(secondModified > firstModified);
-        
+
         // Should still only have one session with this name
         List<String> sessions = proxyService.getRecordedSessions();
         long count = sessions.stream().filter(s -> s.equals(sessionName)).count();

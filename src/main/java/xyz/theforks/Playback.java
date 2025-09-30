@@ -21,8 +21,7 @@ import javafx.scene.media.MediaPlayer;
 import xyz.theforks.model.OSCMessageRecord;
 import xyz.theforks.model.PlaybackMode;
 import xyz.theforks.model.RecordingSession;
-import xyz.theforks.model.SessionConfig;
-import xyz.theforks.model.SessionMetadata;
+import xyz.theforks.model.SessionSettings;
 import xyz.theforks.rewrite.RewriteEngine;
 import xyz.theforks.rewrite.RewriteHandler;
 import xyz.theforks.service.OSCOutputService;
@@ -41,46 +40,27 @@ public class Playback {
     private Thread playbackThread;
     private String playbackHost = "127.0.0.1";
     private int playbackPort = 9000;
-    private SessionConfig sessionConfig;
     private MediaPlayer mediaPlayer;
     private boolean mediaReady = false;
-    private final ObjectMapper objectMapper = new ObjectMapper();
     private OSCOutputService outputService;
     private PlaybackMode playbackMode = PlaybackMode.WITHOUT_REWRITE;
     private final RewriteEngine rewriteEngine;
 
     public Playback() {
         DataDirectory.createDirectories();
-        loadSessionConfig();
         rewriteEngine = new RewriteEngine(RewriteEngine.Context.PLAYBACK);
-    }
-
-    private void loadSessionConfig() {
-        try {
-            File configFile = DataDirectory.getConfigFile("session_config.json").toFile();
-            if (configFile.exists()) {
-                sessionConfig = objectMapper.readValue(configFile, SessionConfig.class);
-            } else {
-                sessionConfig = new SessionConfig();
-            }
-        } catch (Exception e) {
-            System.err.println("Error loading session config: " + e.getMessage());
-            sessionConfig = new SessionConfig();
-        }
-    }
-
-    private void saveSessionConfig() {
-        try {
-            objectMapper.writeValue(DataDirectory.getConfigFile("session_config.json").toFile(), sessionConfig);
-        } catch (Exception e) {
-            System.err.println("Error saving session config: " + e.getMessage());
-        }
     }
 
     public void associateAudioFile(String sessionName, File audioFile) {
         try {
-            // Copy or move audio file to audio directory if it's not already there
-            Path targetPath = DataDirectory.getAudioFile(audioFile.getName());
+            // Create session directory if it doesn't exist
+            File sessionDir = DataDirectory.getSessionDir(sessionName).toFile();
+            if (!sessionDir.exists()) {
+                sessionDir.mkdirs();
+            }
+
+            // Copy audio file to session directory
+            Path targetPath = DataDirectory.getSessionFile(sessionName, audioFile.getName());
             if (!audioFile.getAbsolutePath().equals(targetPath.toAbsolutePath().toString())) {
                 java.nio.file.Files.copy(
                         audioFile.toPath(),
@@ -89,8 +69,10 @@ public class Playback {
                 );
             }
 
-            sessionConfig.addSession(sessionName, audioFile.getName());
-            saveSessionConfig();
+            // Save settings with audio file name
+            SessionSettings settings = new SessionSettings(audioFile.getName());
+            RecordingSession session = new RecordingSession(sessionName);
+            session.saveSettings(settings);
 
             System.out.println("Associated audio file " + audioFile.getName()
                     + " with session " + sessionName);
@@ -101,8 +83,16 @@ public class Playback {
     }
 
     public String getAssociatedAudioFile(String sessionName) {
-        SessionMetadata metadata = sessionConfig.getSession(sessionName);
-        return metadata != null ? metadata.getAudioFile() : null;
+        try {
+            SessionSettings settings = RecordingSession.loadSettings(sessionName);
+            if (settings != null && settings.getAudioFileName() != null) {
+                return settings.getAudioFileName();
+            }
+            return null;
+        } catch (IOException e) {
+            System.err.println("Error loading audio file association: " + e.getMessage());
+            return null;
+        }
     }
 
     public DoubleProperty playbackProgressProperty() {
@@ -119,13 +109,7 @@ public class Playback {
 
     public void playSession(String sessionName) {
         try {
-            File file = DataDirectory.getRecordingFile(sessionName + ".json").toFile();
-            if (!file.exists()) {
-                System.err.println("Recording file not found: " + file.getAbsolutePath());
-                return;
-            }
-
-            RecordingSession session = objectMapper.readValue(file, RecordingSession.class);
+            RecordingSession session = RecordingSession.loadSession(sessionName);
 
             if (session == null || session.getMessages() == null || session.getMessages().isEmpty()) {
                 System.err.println("Invalid session data");
@@ -166,7 +150,7 @@ public class Playback {
                             // we have no other way of knowing when to start the audio.
                             String audioFileName = getAssociatedAudioFile(sessionName);
                             if (audioFileName != null) {
-                                File audioFile = DataDirectory.getAudioFile(audioFileName).toFile();
+                                File audioFile = DataDirectory.getSessionFile(sessionName, audioFileName).toFile();
                                 if (audioFile.exists()) {
                                     Media media = new Media(audioFile.toURI().toString());
                                     mediaPlayer = new MediaPlayer(media);
@@ -178,7 +162,10 @@ public class Playback {
                                         mediaPlayer.play();
                                     });
                                     System.out.println("Started audio playback: " + audioFileName);
-                                } 
+                                } else {
+                                    System.err.println("Audio file not found: " + audioFile.getAbsolutePath());
+                                    mediaReady = true;
+                                }
                             } else {
                                 mediaReady = true;
                             }

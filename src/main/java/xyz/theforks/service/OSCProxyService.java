@@ -139,13 +139,7 @@ public class OSCProxyService {
 
     private void saveSession(RecordingSession session) {
         try {
-            File dir = DataDirectory.getRecordingsDirFile();
-            if (!dir.exists()) {
-                dir.mkdirs();
-            }
-            File file = new File(dir, session.getName() + ".json");
-            objectMapper.writeValue(file, session);
-            System.out.println("Saved recording to: " + file.getAbsolutePath());
+            session.save();
         } catch (IOException e) {
             System.err.println("Error saving session: " + e.getMessage());
             e.printStackTrace();
@@ -156,10 +150,16 @@ public class OSCProxyService {
         List<String> sessions = new ArrayList<>();
         File dir = DataDirectory.getRecordingsDirFile();
         if (dir.exists()) {
-            File[] files = dir.listFiles((d, name) -> name.endsWith(".json"));
-            if (files != null) {
-                for (File file : files) {
-                    sessions.add(file.getName().replace(".json", ""));
+            File[] entries = dir.listFiles();
+            if (entries != null) {
+                for (File entry : entries) {
+                    if (entry.isDirectory()) {
+                        // Check if directory contains data.json
+                        File dataFile = new File(entry, "data.json");
+                        if (dataFile.exists()) {
+                            sessions.add(entry.getName());
+                        }
+                    }
                 }
             }
         }
