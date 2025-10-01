@@ -2,8 +2,11 @@ package xyz.theforks.service;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.*;
+
+import xyz.theforks.util.DataDirectory;
 
 import java.io.File;
 import java.io.IOException;
@@ -15,13 +18,22 @@ class OSCProxyServiceTest {
 
     @TempDir
     Path tempDir;
-    
+
     private OSCProxyService proxyService;
 
     @BeforeEach
     void setUp() {
+        // Use temp directory instead of real data directory
+        DataDirectory.setTestOverrideDir(tempDir);
+
         // Set up proxy service (uses DataDirectory for recordings)
         proxyService = new OSCProxyService();
+    }
+
+    @AfterEach
+    void tearDown() {
+        // Reset to default directory after each test
+        DataDirectory.setTestOverrideDir(null);
     }
 
     @Test
@@ -58,26 +70,6 @@ class OSCProxyServiceTest {
 
     @Test
     void testGetRecordedSessionsEmptyDirectory() {
-        // Clear any existing files and directories first
-        File recordingsDir = new File(proxyService.getRecordingsDir());
-        if (recordingsDir.exists()) {
-            File[] entries = recordingsDir.listFiles();
-            if (entries != null) {
-                for (File entry : entries) {
-                    if (entry.isDirectory()) {
-                        // Delete directory contents
-                        File[] subFiles = entry.listFiles();
-                        if (subFiles != null) {
-                            for (File subFile : subFiles) {
-                                subFile.delete();
-                            }
-                        }
-                    }
-                    entry.delete();
-                }
-            }
-        }
-
         List<String> sessions = proxyService.getRecordedSessions();
         assertNotNull(sessions);
         assertTrue(sessions.isEmpty());
@@ -85,25 +77,7 @@ class OSCProxyServiceTest {
 
     @Test
     void testGetRecordedSessionsWithFiles() throws IOException {
-        // Clear existing files first
         File recordingsDir = new File(proxyService.getRecordingsDir());
-        if (recordingsDir.exists()) {
-            File[] files = recordingsDir.listFiles();
-            if (files != null) {
-                for (File file : files) {
-                    if (file.isDirectory()) {
-                        // Delete directory contents
-                        File[] subFiles = file.listFiles();
-                        if (subFiles != null) {
-                            for (File subFile : subFiles) {
-                                subFile.delete();
-                            }
-                        }
-                    }
-                    file.delete();
-                }
-            }
-        }
         recordingsDir.mkdirs();
 
         // Create some test session directories with data.json
@@ -164,26 +138,6 @@ class OSCProxyServiceTest {
 
     @Test
     void testMultipleRecordingSessions() throws IOException {
-        // Clear existing files and directories first
-        File recordingsDir = new File(proxyService.getRecordingsDir());
-        if (recordingsDir.exists()) {
-            File[] entries = recordingsDir.listFiles();
-            if (entries != null) {
-                for (File entry : entries) {
-                    if (entry.isDirectory()) {
-                        // Delete directory contents
-                        File[] subFiles = entry.listFiles();
-                        if (subFiles != null) {
-                            for (File subFile : subFiles) {
-                                subFile.delete();
-                            }
-                        }
-                    }
-                    entry.delete();
-                }
-            }
-        }
-
         String session1 = "recording1";
         String session2 = "recording2";
 
