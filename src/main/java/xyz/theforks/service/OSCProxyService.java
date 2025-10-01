@@ -29,8 +29,14 @@ public class OSCProxyService {
     private boolean isRecording = false;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final IntegerProperty messageCount = new SimpleIntegerProperty(0);
+    private ProjectManager projectManager;
 
     public OSCProxyService() {
+        this(null);
+    }
+
+    public OSCProxyService(ProjectManager projectManager) {
+        this.projectManager = projectManager;
         inputService = new OSCInputService();
         inputService.setMessageHandler(new MessageHandlerClass() {
             @Override
@@ -209,7 +215,7 @@ public class OSCProxyService {
 
     public List<String> getRecordedSessions() {
         List<String> sessions = new ArrayList<>();
-        File dir = DataDirectory.getRecordingsDirFile();
+        File dir = getRecordingsDirFile();
         if (dir.exists()) {
             File[] entries = dir.listFiles();
             if (entries != null) {
@@ -228,7 +234,21 @@ public class OSCProxyService {
     }
 
     public String getRecordingsDir() {
+        if (projectManager != null && projectManager.hasOpenProject()) {
+            return projectManager.getRecordingsDir().toString();
+        }
         return DataDirectory.getRecordingsDir().toString();
+    }
+
+    private File getRecordingsDirFile() {
+        if (projectManager != null && projectManager.hasOpenProject()) {
+            return projectManager.getRecordingsDir().toFile();
+        }
+        return DataDirectory.getRecordingsDirFile();
+    }
+
+    public void setProjectManager(ProjectManager projectManager) {
+        this.projectManager = projectManager;
     }
     
     /**

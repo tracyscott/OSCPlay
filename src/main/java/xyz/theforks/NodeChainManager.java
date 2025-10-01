@@ -34,6 +34,7 @@ import xyz.theforks.nodes.OSCNode;
 import xyz.theforks.nodes.NodeRegistry;
 import xyz.theforks.service.OSCOutputService;
 import xyz.theforks.service.OSCProxyService;
+import xyz.theforks.service.ProjectManager;
 import xyz.theforks.ui.Theme;
 import xyz.theforks.util.DataDirectory;
 
@@ -41,6 +42,7 @@ public class NodeChainManager {
     private final OSCProxyService proxyService;
     private final TextArea logArea;
     private final Label statusBar;
+    private ProjectManager projectManager;
     private Playback playback; // Optional playback instance for node synchronization
     private ListView<OSCNode> nodesListView;
     private ObservableList<OSCNode> activeNodes = FXCollections.observableArrayList();
@@ -54,6 +56,10 @@ public class NodeChainManager {
         this.proxyService = proxyService;
         this.logArea = logArea;
         this.statusBar = statusBar;
+    }
+
+    public void setProjectManager(ProjectManager projectManager) {
+        this.projectManager = projectManager;
     }
 
     /**
@@ -86,10 +92,7 @@ public class NodeChainManager {
      */
     public void setPlayback(Playback playback) {
         this.playback = playback;
-        // Sync existing nodes to playback if any
-        if (playback != null && !activeNodes.isEmpty()) {
-            playback.setNodes(new java.util.ArrayList<>(activeNodes));
-        }
+        // Note: Playback now uses all enabled outputs from proxyService directly
     }
 
     /**
@@ -318,8 +321,12 @@ public class NodeChainManager {
                 fileChooser.getExtensionFilters().add(
                     new FileChooser.ExtensionFilter("JSON Files", "*.json")
                 );
-                // Set initial directory to config directory
-                fileChooser.setInitialDirectory(DataDirectory.getConfigDirFile());
+                // Set initial directory to project node chains directory or config directory
+                if (projectManager != null && projectManager.hasOpenProject()) {
+                    fileChooser.setInitialDirectory(projectManager.getNodeChainsDir().toFile());
+                } else {
+                    fileChooser.setInitialDirectory(DataDirectory.getConfigDirFile());
+                }
             }
 
             File file = fileChooser.showOpenDialog(null);
@@ -404,8 +411,12 @@ public class NodeChainManager {
             fileChooser.getExtensionFilters().add(
                 new FileChooser.ExtensionFilter("JSON Files", "*.json")
             );
-            // Set initial directory to config directory
-            fileChooser.setInitialDirectory(DataDirectory.getConfigDirFile());
+            // Set initial directory to project node chains directory or config directory
+            if (projectManager != null && projectManager.hasOpenProject()) {
+                fileChooser.setInitialDirectory(projectManager.getNodeChainsDir().toFile());
+            } else {
+                fileChooser.setInitialDirectory(DataDirectory.getConfigDirFile());
+            }
         }
 
         File file = fileChooser.showSaveDialog(null);

@@ -11,11 +11,16 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import xyz.theforks.util.DataDirectory;
 
+import java.nio.file.Path;
+
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class RecordingSession {
     private String name;
     private List<OSCMessageRecord> messages;
     private long startTime;
+
+    // Static context for recordings directory (set by ProjectManager or defaults to DataDirectory)
+    private static Path recordingsDir = null;
 
     // Default constructor for Jackson
     public RecordingSession() {
@@ -53,32 +58,75 @@ public class RecordingSession {
     public void setStartTime(long startTime) { this.startTime = startTime; }
 
     /**
-     * Save this session to the new directory structure.
-     * Creates: ~/Documents/OSCPlay/recordings/{sessionName}/data.json
+     * Set the recordings directory to use for saving/loading sessions.
+     * @param dir The recordings directory path
+     */
+    public static void setRecordingsDirectory(Path dir) {
+        recordingsDir = dir;
+    }
+
+    /**
+     * Get the current recordings directory.
+     * @return The recordings directory path
+     */
+    private static Path getRecordingsDirectory() {
+        return recordingsDir != null ? recordingsDir : DataDirectory.getRecordingsDir();
+    }
+
+    /**
+     * Get the session directory path.
+     * @param sessionName The session name
+     * @return Path to the session directory
+     */
+    private static Path getSessionDir(String sessionName) {
+        return getRecordingsDirectory().resolve(sessionName);
+    }
+
+    /**
+     * Get the session data file path.
+     * @param sessionName The session name
+     * @return Path to the session's data.json file
+     */
+    private static Path getSessionDataFile(String sessionName) {
+        return getSessionDir(sessionName).resolve("data.json");
+    }
+
+    /**
+     * Get the session settings file path.
+     * @param sessionName The session name
+     * @return Path to the session's settings.json file
+     */
+    private static Path getSessionSettingsFile(String sessionName) {
+        return getSessionDir(sessionName).resolve("settings.json");
+    }
+
+    /**
+     * Save this session to the directory structure.
+     * Creates: {recordingsDir}/{sessionName}/data.json
      */
     public void save() throws IOException {
         final ObjectMapper objectMapper = new ObjectMapper();
 
         // Create session directory if it doesn't exist
-        File sessionDir = DataDirectory.getSessionDir(name).toFile();
+        File sessionDir = getSessionDir(name).toFile();
         if (!sessionDir.exists()) {
             sessionDir.mkdirs();
         }
 
         // Save session data
-        File dataFile = DataDirectory.getSessionDataFile(name).toFile();
+        File dataFile = getSessionDataFile(name).toFile();
         objectMapper.writeValue(dataFile, this);
         System.out.println("Saved recording to: " + dataFile.getAbsolutePath());
     }
 
     /**
      * Load a session from the directory structure.
-     * Loads: ~/Documents/OSCPlay/recordings/{sessionName}/data.json
+     * Loads: {recordingsDir}/{sessionName}/data.json
      */
     static public RecordingSession loadSession(String sessionName) throws IOException {
         final ObjectMapper objectMapper = new ObjectMapper();
 
-        File dataFile = DataDirectory.getSessionDataFile(sessionName).toFile();
+        File dataFile = getSessionDataFile(sessionName).toFile();
         if (!dataFile.exists()) {
             System.err.println("Recording file not found: " + sessionName);
             return null;
@@ -102,12 +150,12 @@ public class RecordingSession {
         final ObjectMapper objectMapper = new ObjectMapper();
 
         // Create session directory if it doesn't exist
-        File sessionDir = DataDirectory.getSessionDir(name).toFile();
+        File sessionDir = getSessionDir(name).toFile();
         if (!sessionDir.exists()) {
             sessionDir.mkdirs();
         }
 
-        File settingsFile = DataDirectory.getSessionSettingsFile(name).toFile();
+        File settingsFile = getSessionSettingsFile(name).toFile();
         objectMapper.writeValue(settingsFile, settings);
     }
 
@@ -119,7 +167,7 @@ public class RecordingSession {
     static public SessionSettings loadSettings(String sessionName) throws IOException {
         final ObjectMapper objectMapper = new ObjectMapper();
 
-        File settingsFile = DataDirectory.getSessionSettingsFile(sessionName).toFile();
+        File settingsFile = getSessionSettingsFile(sessionName).toFile();
         if (!settingsFile.exists()) {
             return null;
         }

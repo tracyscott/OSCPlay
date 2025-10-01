@@ -13,6 +13,9 @@ import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.Menu;
+import javafx.scene.control.MenuBar;
+import javafx.scene.control.MenuItem;
 import javafx.scene.control.ProgressBar;
 import javafx.scene.control.RadioButton;
 import javafx.scene.control.Tab;
@@ -33,13 +36,17 @@ import javafx.stage.FileChooser;
 import javafx.stage.FileChooser.ExtensionFilter;
 import javafx.stage.Stage;
 import xyz.theforks.model.ApplicationConfig;
+import xyz.theforks.model.AppSettings;
 import xyz.theforks.model.NodeChainConfig;
 import xyz.theforks.model.OutputConfig;
 import xyz.theforks.model.PlaybackMode;
+import xyz.theforks.model.ProjectConfig;
+import xyz.theforks.model.RecordingSession;
 import xyz.theforks.nodes.OSCNode;
 import xyz.theforks.service.OSCInputService;
 import xyz.theforks.service.OSCOutputService;
 import xyz.theforks.service.OSCProxyService;
+import xyz.theforks.service.ProjectManager;
 import xyz.theforks.ui.SamplerPadUI;
 import xyz.theforks.ui.Theme;
 import xyz.theforks.util.DataDirectory;
@@ -101,6 +108,8 @@ public class OSCProxyApp extends Application {
 
     // Add fields
     private NodeChainManager nodeChainManager;
+    private ProjectManager projectManager;
+    private Stage primaryStage;
 
     public static void main(String[] args) {
         // Parse command line arguments
@@ -143,19 +152,35 @@ public class OSCProxyApp extends Application {
 
     @Override
     public void start(Stage primaryStage) {
+        this.primaryStage = primaryStage;
+
+        // Initialize project manager and load last project
+        projectManager = new ProjectManager();
+        try {
+            projectManager.loadLastProject();
+            // Set the recordings directory for RecordingSession
+            if (projectManager.hasOpenProject()) {
+                RecordingSession.setRecordingsDirectory(projectManager.getRecordingsDir());
+            }
+        } catch (IOException e) {
+            showError("Error loading project", e.getMessage());
+        }
+
         // Load application configuration
         loadApplicationConfig();
 
         // Currently we can only have one playback operation at a time so we have a single instance
         // here.  The various playback/stop playback buttons will control this instance.
         playback = new Playback();
-        proxyService = new OSCProxyService();
+        proxyService = new OSCProxyService(projectManager);
 
-        // Apply loaded configuration
-        playback.setPlaybackMode(appConfig.getPlaybackMode());
+        // Note: Playback always rewrites messages through all enabled output node chains
 
         // Load outputs from configuration
         loadOutputsFromConfig();
+
+        // Create menu bar
+        MenuBar menuBar = createMenuBar(primaryStage);
 
         // Create UI components
         GridPane grid = new GridPane();
@@ -225,6 +250,7 @@ public class OSCProxyApp extends Application {
 
         // Node chain section (below output config, row 4)
         nodeChainManager = new NodeChainManager(proxyService, logArea, statusBar);
+        nodeChainManager.setProjectManager(projectManager);
         nodeChainManager.createUI(proxyGrid, 5);
 
         // Connect the playback instance to the node chain manager for synchronization
@@ -422,11 +448,16 @@ public class OSCProxyApp extends Application {
         // Create scene
         // Apply loaded configuration to UI controls
         applyConfigurationToUI();
-        
-        Scene scene = new Scene(grid);
+
+        // Create root layout with menu bar and main content
+        VBox root = new VBox();
+        root.getChildren().addAll(menuBar, grid);
+        VBox.setVgrow(grid, Priority.ALWAYS);
+
+        Scene scene = new Scene(root);
         scene.setFill(Color.web("#121212"));
         Theme.applyDark(scene);
-        primaryStage.setTitle("OSC Play");
+        updateWindowTitle(primaryStage);
         primaryStage.setScene(scene);
         primaryStage.show();
 
@@ -451,6 +482,180 @@ public class OSCProxyApp extends Application {
             showError("Error starting proxy", ex.getMessage());
             log("Error: " + ex.getMessage());
             proxyToggleButton.setSelected(false);
+        }
+    }
+
+    /**
+     * Create the application menu bar.
+     */
+    private MenuBar createMenuBar(Stage primaryStage) {
+        MenuBar menuBar = new MenuBar();
+
+        // File menu
+        Menu fileMenu = new Menu("File");
+
+        MenuItem newProjectItem = new MenuItem("New");
+        newProjectItem.setOnAction(e -> handleNewProject());
+
+        MenuItem openProjectItem = new MenuItem("Open...");
+        openProjectItem.setOnAction(e -> handleOpenProject(primaryStage));
+
+        MenuItem saveProjectItem = new MenuItem("Save");
+        saveProjectItem.setOnAction(e -> handleSaveProject());
+
+        MenuItem saveAsProjectItem = new MenuItem("Save As...");
+        saveAsProjectItem.setOnAction(e -> handleSaveAsProject());
+
+        fileMenu.getItems().addAll(newProjectItem, openProjectItem, saveProjectItem, saveAsProjectItem);
+        menuBar.getMenus().add(fileMenu);
+
+        return menuBar;
+    }
+
+    /**
+     * Handle New Project menu action.
+     */
+    private void handleNewProject() {
+        TextInputDialog dialog = new TextInputDialog("Untitled");
+        dialog.setTitle("New Project");
+        dialog.setHeaderText("Create a new OSCPlay project");
+        dialog.setContentText("Project name:");
+
+        dialog.showAndWait().ifPresent(name -> {
+            try {
+                projectManager.createProject(name);
+                log("Created new project: " + name);
+                // Reload UI with new project settings
+                loadProjectConfiguration();
+                updateWindowTitle(primaryStage);
+            } catch (IOException ex) {
+                showError("Error creating project", ex.getMessage());
+            }
+        });
+    }
+
+    /**
+     * Handle Open Project menu action.
+     */
+    private void handleOpenProject(Stage stage) {
+        FileChooser fileChooser = new FileChooser();
+        fileChooser.setTitle("Open Project");
+        fileChooser.setInitialDirectory(ProjectManager.getProjectsDir().toFile());
+        fileChooser.getExtensionFilters().add(
+            new ExtensionFilter("OSCPlay Projects", "*.opp")
+        );
+
+        File selectedFile = fileChooser.showOpenDialog(stage);
+        if (selectedFile != null) {
+            try {
+                projectManager.openProject(selectedFile);
+                log("Opened project: " + selectedFile.getName());
+                // Reload UI with project settings
+                loadProjectConfiguration();
+                updateWindowTitle(primaryStage);
+            } catch (IOException ex) {
+                showError("Error opening project", ex.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Handle Save Project menu action.
+     */
+    private void handleSaveProject() {
+        try {
+            saveProjectConfiguration();
+            projectManager.saveProject();
+            log("Saved project: " + projectManager.getCurrentProjectName());
+        } catch (IOException ex) {
+            showError("Error saving project", ex.getMessage());
+        }
+    }
+
+    /**
+     * Handle Save As Project menu action.
+     */
+    private void handleSaveAsProject() {
+        TextInputDialog dialog = new TextInputDialog(projectManager.getCurrentProjectName());
+        dialog.setTitle("Save Project As");
+        dialog.setHeaderText("Save project with a new name");
+        dialog.setContentText("Project name:");
+
+        dialog.showAndWait().ifPresent(name -> {
+            try {
+                saveProjectConfiguration();
+                projectManager.saveProjectAs(name);
+                log("Saved project as: " + name);
+                updateWindowTitle(primaryStage);
+            } catch (IOException ex) {
+                showError("Error saving project", ex.getMessage());
+            }
+        });
+    }
+
+    /**
+     * Load project configuration into the application.
+     */
+    private void loadProjectConfiguration() {
+        ProjectConfig project = projectManager.getCurrentProject();
+        if (project != null) {
+            // Set the recordings directory for RecordingSession
+            if (projectManager.hasOpenProject()) {
+                RecordingSession.setRecordingsDirectory(projectManager.getRecordingsDir());
+            }
+
+            // Load playback mode from project config (for backward compatibility)
+            // Note: Playback now always rewrites through all enabled output node chains
+            playbackRewriteCheckBox.setSelected(project.getPlaybackMode() == PlaybackMode.WITH_REWRITE);
+
+            // Load outputs
+            proxyService.getOutputs().clear();
+            for (OutputConfig outputConfig : project.getOutputs()) {
+                if ("default".equals(outputConfig.getId())) {
+                    OSCOutputService defaultOutput = proxyService.getOutput("default");
+                    if (defaultOutput != null) {
+                        defaultOutput.setOutHost(outputConfig.getHost());
+                        defaultOutput.setOutPort(outputConfig.getPort());
+                        defaultOutput.setEnabled(outputConfig.isEnabled());
+                        loadNodeChainForOutput(defaultOutput, outputConfig.getNodeChain());
+                    }
+                } else {
+                    OSCOutputService output = new OSCOutputService(outputConfig.getId());
+                    output.setOutHost(outputConfig.getHost());
+                    output.setOutPort(outputConfig.getPort());
+                    output.setEnabled(outputConfig.isEnabled());
+                    proxyService.addOutput(output);
+                    loadNodeChainForOutput(output, outputConfig.getNodeChain());
+                }
+            }
+
+            // Update UI
+            updateOutputsList();
+            updateSessionsList();
+        }
+    }
+
+    /**
+     * Save current configuration to the project.
+     */
+    private void saveProjectConfiguration() {
+        ProjectConfig project = projectManager.getCurrentProject();
+        if (project != null) {
+            // Save playback mode (always WITH_REWRITE now)
+            project.setPlaybackMode(PlaybackMode.WITH_REWRITE);
+
+            // Save outputs
+            project.getOutputs().clear();
+            for (OSCOutputService output : proxyService.getOutputs()) {
+                OutputConfig outputConfig = new OutputConfig(
+                        output.getId(),
+                        output.getOutHost(),
+                        output.getOutPort(),
+                        output.isEnabled(),
+                        saveNodeChainForOutput(output)
+                );
+                project.addOrUpdateOutput(outputConfig);
+            }
         }
     }
 
@@ -521,7 +726,7 @@ public class OSCProxyApp extends Application {
                 log("Error starting output: " + ioex.getMessage());
             }
            
-            playback.setOutputService(outputService);
+            playback.setProxyService(proxyService);
             playback.playSession(sessionComboBox.getSelectionModel().getSelectedItem());
             log("Playing session: " + sessionComboBox.getSelectionModel().getSelectedItem());
         });
@@ -578,10 +783,11 @@ public class OSCProxyApp extends Application {
         });
 
         // Playback mode event handler
+        // Note: Playback now always rewrites through all enabled output node chains
+        // Checkbox kept for UI backward compatibility but doesn't affect behavior
         playbackRewriteCheckBox.setOnAction(e -> {
-            PlaybackMode mode = playbackRewriteCheckBox.isSelected() ? 
+            PlaybackMode mode = playbackRewriteCheckBox.isSelected() ?
                 PlaybackMode.WITH_REWRITE : PlaybackMode.WITHOUT_REWRITE;
-            playback.setPlaybackMode(mode);
             appConfig.setPlaybackMode(mode);
             saveApplicationConfig();
         });
@@ -797,6 +1003,16 @@ public class OSCProxyApp extends Application {
             logArea.appendText(message + "\n");
             logArea.setScrollTop(Double.MAX_VALUE); // Scroll to bottom
         });
+    }
+
+    /**
+     * Update the window title to show the current project name.
+     */
+    private void updateWindowTitle(Stage stage) {
+        String projectName = projectManager != null && projectManager.getCurrentProjectName() != null
+                ? projectManager.getCurrentProjectName()
+                : "Untitled";
+        stage.setTitle("OSC Play - " + projectName);
     }
 
     private static void printUsage() {

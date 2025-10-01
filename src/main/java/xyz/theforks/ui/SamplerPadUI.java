@@ -9,7 +9,6 @@ import javafx.scene.paint.Color;
 import javafx.stage.FileChooser;
 import xyz.theforks.Playback;
 import xyz.theforks.model.SamplerPad;
-import xyz.theforks.service.OSCOutputService;
 import xyz.theforks.service.OSCProxyService;
 import xyz.theforks.util.DataDirectory;
 
@@ -140,18 +139,12 @@ public class SamplerPadUI extends VBox {
             return;
         }
 
-        OSCOutputService outputService = proxyService.getOutputService();
-        if (outputService == null) {
-            log("Output service not available");
-            return;
-        }
-
         // Change button to dark red
         Button button = padButtons.get(padIndex);
         activePads.put(padIndex, padIndex);
         button.setStyle("-fx-background-color: #8B0000; -fx-text-fill: white; -fx-font-size: 14px;");
 
-        playback.setOutputService(outputService);
+        playback.setProxyService(proxyService);
         playback.playSession(pad.getSessionName());
         log("Playing pad " + padIndex + ": " + pad.getSessionName());
     }

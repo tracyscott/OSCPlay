@@ -19,12 +19,10 @@ import javafx.beans.property.SimpleDoubleProperty;
 import javafx.scene.media.Media;
 import javafx.scene.media.MediaPlayer;
 import xyz.theforks.model.OSCMessageRecord;
-import xyz.theforks.model.PlaybackMode;
 import xyz.theforks.model.RecordingSession;
 import xyz.theforks.model.SessionSettings;
-import xyz.theforks.nodes.NodeChain;
-import xyz.theforks.nodes.OSCNode;
 import xyz.theforks.service.OSCOutputService;
+import xyz.theforks.service.OSCProxyService;
 import xyz.theforks.util.DataDirectory;
 
 /**
@@ -42,13 +40,10 @@ public class Playback {
     private int playbackPort = 9000;
     private MediaPlayer mediaPlayer;
     private boolean mediaReady = false;
-    private OSCOutputService outputService;
-    private PlaybackMode playbackMode = PlaybackMode.WITHOUT_REWRITE;
-    private final NodeChain nodeChain;
+    private OSCProxyService proxyService;
 
     public Playback() {
         DataDirectory.createDirectories();
-        nodeChain = new NodeChain(NodeChain.Context.PLAYBACK);
     }
 
     public void associateAudioFile(String sessionName, File audioFile) {
@@ -103,8 +98,12 @@ public class Playback {
         return isPlaying;
     }
 
-    public void setOutputService(OSCOutputService outputService) {
-        this.outputService = outputService;
+    /**
+     * Set the proxy service which manages all outputs.
+     * @param proxyService The proxy service
+     */
+    public void setProxyService(OSCProxyService proxyService) {
+        this.proxyService = proxyService;
     }
 
     public void playSession(String sessionName) {
@@ -196,17 +195,15 @@ public class Playback {
 
                                 OSCMessage oscMsg = new OSCMessage(msg.getAddress(), List.of(msg.getArguments()));
 
-                                // Apply node chain based on playback mode
-                                if (playbackMode == PlaybackMode.WITH_REWRITE) {
-                                    oscMsg = nodeChain.processMessage(oscMsg);
-                                    if (oscMsg == null) {
-                                        // Message was cancelled by node
-                                        continue;
+                                // Send to all enabled outputs, each output applies its own node chain
+                                if (proxyService != null) {
+                                    for (OSCOutputService output : proxyService.getOutputs()) {
+                                        if (output.isEnabled()) {
+                                            output.send(oscMsg);
+                                        }
                                     }
                                 }
-                                
-                                outputService.send(oscMsg);
-                                //System.out.println("Played back message " + (i + 1) + "/" + totalMessages + 
+                                //System.out.println("Played back message " + (i + 1) + "/" + totalMessages +
                                 //                 ": " + msg.getAddress());
                             }
                         } catch (InterruptedException e) {
@@ -254,60 +251,6 @@ public class Playback {
         }
     }
 
-    /**
-     * Get the current playback mode.
-     * @return The playback mode
-     */
-    public PlaybackMode getPlaybackMode() {
-        return playbackMode;
-    }
-    
-    /**
-     * Set the playback mode.
-     * @param mode The playback mode
-     */
-    public void setPlaybackMode(PlaybackMode mode) {
-        this.playbackMode = mode;
-    }
-    
-    /**
-     * Get the node chain used for playback.
-     * @return The node chain
-     */
-    public NodeChain getNodeChain() {
-        return nodeChain;
-    }
-
-    /**
-     * Register a node for playback.
-     * @param node The node to register
-     */
-    public void registerNode(OSCNode node) {
-        nodeChain.registerNode(node);
-    }
-
-    /**
-     * Unregister a node from playback.
-     * @param node The node to unregister
-     */
-    public void unregisterNode(OSCNode node) {
-        nodeChain.unregisterNode(node);
-    }
-
-    /**
-     * Clear all nodes from playback.
-     */
-    public void clearNodes() {
-        nodeChain.clearNodes();
-    }
-
-    /**
-     * Set the list of nodes, replacing any existing nodes.
-     * @param nodes The new list of nodes
-     */
-    public void setNodes(List<OSCNode> nodes) {
-        nodeChain.setNodes(nodes);
-    }
     
     @Override
     protected void finalize() throws Throwable {
