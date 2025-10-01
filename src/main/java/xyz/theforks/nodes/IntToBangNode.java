@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.illposed.osc.OSCMessage;
+import com.illposed.osc.OSCMessageInfo;
 
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
@@ -67,7 +68,9 @@ public class IntToBangNode implements OSCNode {
 
                 // If integer is 1, forward message with no arguments
                 if (intValue == 1) {
-                    return new OSCMessage(addr, new ArrayList<>());
+                    OSCMessage msg = new OSCMessage(addr, new ArrayList<>());
+                    msg.setInfo(new OSCMessageInfo("i"));
+                    return msg;
                 } else {
                     // Drop the message by returning null
                     return null;
