@@ -69,7 +69,7 @@ public class IntToBangNode implements OSCNode {
                 // If integer is 1, forward message with no arguments
                 if (intValue == 1) {
                     OSCMessage msg = new OSCMessage(addr, new ArrayList<>());
-                    msg.setInfo(new OSCMessageInfo("i"));
+                    msg.setInfo(new OSCMessageInfo(",I"));
                     return msg;
                 } else {
                     // Drop the message by returning null

@@ -10,10 +10,12 @@ import javafx.stage.FileChooser;
 import xyz.theforks.Playback;
 import xyz.theforks.model.SamplerPad;
 import xyz.theforks.service.OSCProxyService;
+import xyz.theforks.service.ProjectManager;
 import xyz.theforks.util.DataDirectory;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -28,16 +30,18 @@ public class SamplerPadUI extends VBox {
     private final OSCProxyService proxyService;
     private final Playback playback;
     private final TextArea logArea;
+    private final ProjectManager projectManager;
     private final GridPane padGrid;
     private final Map<Integer, SamplerPad> pads;
     private final Map<Integer, Button> padButtons;
     private final Map<Integer, Integer> activePads; // Maps padIndex to playing state
     private final ObjectMapper mapper;
 
-    public SamplerPadUI(OSCProxyService proxyService, Playback playback, TextArea logArea) {
+    public SamplerPadUI(OSCProxyService proxyService, Playback playback, TextArea logArea, ProjectManager projectManager) {
         this.proxyService = proxyService;
         this.playback = playback;
         this.logArea = logArea;
+        this.projectManager = projectManager;
         this.pads = new HashMap<>();
         this.padButtons = new HashMap<>();
         this.activePads = new HashMap<>();
@@ -247,8 +251,12 @@ public class SamplerPadUI extends VBox {
 
     private void saveConfiguration() {
         try {
-            File configFile = DataDirectory.getConfigFile(CONFIG_FILE).toFile();
-            mapper.writeValue(configFile, pads);
+            if (projectManager == null || !projectManager.hasOpenProject()) {
+                log("Warning: No project open, cannot save sampler configuration");
+                return;
+            }
+            Path configFile = projectManager.getProjectDir().resolve(CONFIG_FILE);
+            mapper.writeValue(configFile.toFile(), pads);
         } catch (Exception e) {
             log("Error saving sampler configuration: " + e.getMessage());
         }
@@ -256,10 +264,14 @@ public class SamplerPadUI extends VBox {
 
     private void loadConfiguration() {
         try {
-            File configFile = DataDirectory.getConfigFile(CONFIG_FILE).toFile();
-            if (configFile.exists()) {
+            if (projectManager == null || !projectManager.hasOpenProject()) {
+                // No project open, skip loading
+                return;
+            }
+            Path configFile = projectManager.getProjectDir().resolve(CONFIG_FILE);
+            if (configFile.toFile().exists()) {
                 Map<String, SamplerPad> loadedPads = mapper.readValue(
-                        configFile,
+                        configFile.toFile(),
                         mapper.getTypeFactory().constructMapType(HashMap.class, String.class, SamplerPad.class));
 
                 // Convert String keys to Integer

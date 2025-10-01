@@ -204,8 +204,8 @@ public class OSCProxyApp extends Application {
 
         // Note: Playback always rewrites messages through all enabled output node chains
 
-        // Load outputs from configuration
-        loadOutputsFromConfig();
+        // Initialize outputs from project configuration (UI will be updated later)
+        initializeOutputsFromProject();
 
         // Create menu bar
         MenuBar menuBar = createMenuBar(primaryStage);
@@ -361,7 +361,7 @@ public class OSCProxyApp extends Application {
         Tab recordPlaybackTab = new Tab("Record / Playback", recordPlaybackBox);
 
         // Create Sampler tab content
-        SamplerPadUI samplerPadUI = new SamplerPadUI(proxyService, playback, logArea);
+        SamplerPadUI samplerPadUI = new SamplerPadUI(proxyService, playback, logArea, projectManager);
         Tab samplerTab = new Tab("Sampler", samplerPadUI);
 
         // Add tabs to TabPane
@@ -621,9 +621,10 @@ public class OSCProxyApp extends Application {
     }
 
     /**
-     * Load project configuration into the application.
+     * Initialize outputs from project configuration without updating UI.
+     * Called during startup before UI components are created.
      */
-    private void loadProjectConfiguration() {
+    private void initializeOutputsFromProject() {
         ProjectConfig project = projectManager.getCurrentProject();
         if (project != null) {
             // Set the recordings directory for RecordingSession
@@ -631,30 +632,58 @@ public class OSCProxyApp extends Application {
                 RecordingSession.setRecordingsDirectory(projectManager.getRecordingsDir());
             }
 
-            // Load outputs
+            // Clear all outputs first to remove any previously loaded data
             proxyService.getOutputs().clear();
-            for (OutputConfig outputConfig : project.getOutputs()) {
-                if ("default".equals(outputConfig.getId())) {
-                    OSCOutputService defaultOutput = proxyService.getOutput("default");
-                    if (defaultOutput != null) {
+
+            // If project has no outputs configured, ensure default output exists with empty node chain
+            if (project.getOutputs().isEmpty()) {
+                OSCOutputService defaultOutput = new OSCOutputService("default");
+                defaultOutput.setOutHost("127.0.0.1");
+                defaultOutput.setOutPort(3030);
+                defaultOutput.setEnabled(true);
+                proxyService.addOutput(defaultOutput);
+            } else {
+                // Load outputs from project configuration
+                for (OutputConfig outputConfig : project.getOutputs()) {
+                    if ("default".equals(outputConfig.getId())) {
+                        OSCOutputService defaultOutput = new OSCOutputService("default");
                         defaultOutput.setOutHost(outputConfig.getHost());
                         defaultOutput.setOutPort(outputConfig.getPort());
                         defaultOutput.setEnabled(outputConfig.isEnabled());
+                        proxyService.addOutput(defaultOutput);
                         loadNodeChainForOutput(defaultOutput, outputConfig.getNodeChain());
+                    } else {
+                        OSCOutputService output = new OSCOutputService(outputConfig.getId());
+                        output.setOutHost(outputConfig.getHost());
+                        output.setOutPort(outputConfig.getPort());
+                        output.setEnabled(outputConfig.isEnabled());
+                        proxyService.addOutput(output);
+                        loadNodeChainForOutput(output, outputConfig.getNodeChain());
                     }
-                } else {
-                    OSCOutputService output = new OSCOutputService(outputConfig.getId());
-                    output.setOutHost(outputConfig.getHost());
-                    output.setOutPort(outputConfig.getPort());
-                    output.setEnabled(outputConfig.isEnabled());
-                    proxyService.addOutput(output);
-                    loadNodeChainForOutput(output, outputConfig.getNodeChain());
                 }
             }
+        }
+    }
 
-            // Update UI
+    /**
+     * Load project configuration into the application and update UI.
+     * Called when switching projects after UI has been created.
+     */
+    private void loadProjectConfiguration() {
+        // Initialize outputs from project
+        initializeOutputsFromProject();
+
+        // Update UI components (only if they exist)
+        if (outputComboBox != null) {
             updateOutputsList();
+        }
+        if (sessionComboBox != null) {
             updateSessionsList();
+        }
+
+        // Update NodeChainManager to show the current output's node chain
+        if (nodeChainManager != null && selectedOutputId != null) {
+            nodeChainManager.setOutputId(selectedOutputId);
         }
     }
 

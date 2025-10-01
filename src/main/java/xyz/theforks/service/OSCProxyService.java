@@ -48,6 +48,9 @@ public class OSCProxyService {
         outputs = new HashMap<>();
         // Create default output for backward compatibility
         OSCOutputService defaultOutput = new OSCOutputService("default");
+        defaultOutput.setOutHost("127.0.0.1");
+        defaultOutput.setOutPort(3030);
+        defaultOutput.setEnabled(true);
         outputs.put(defaultOutput.getId(), defaultOutput);
 
         DataDirectory.createDirectories();
