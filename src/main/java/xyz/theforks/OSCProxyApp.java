@@ -16,6 +16,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.Menu;
 import javafx.scene.control.MenuBar;
 import javafx.scene.control.MenuItem;
+import javafx.scene.control.SeparatorMenuItem;
 import javafx.scene.control.ProgressBar;
 import javafx.scene.control.RadioButton;
 import javafx.scene.control.Tab;
@@ -43,16 +44,20 @@ import xyz.theforks.model.PlaybackMode;
 import xyz.theforks.model.ProjectConfig;
 import xyz.theforks.model.RecordingSession;
 import xyz.theforks.nodes.OSCNode;
+import xyz.theforks.nodes.ScriptNode;
 import xyz.theforks.service.OSCInputService;
 import xyz.theforks.service.OSCOutputService;
 import xyz.theforks.service.OSCProxyService;
 import xyz.theforks.service.ProjectManager;
+import xyz.theforks.ui.ProjectSplashScreen;
 import xyz.theforks.ui.SamplerPadUI;
 import xyz.theforks.ui.Theme;
+import xyz.theforks.ui.MonitorWindow;
 import xyz.theforks.util.DataDirectory;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.File;
+import java.nio.file.Path;
 import java.util.List;
 
 public class OSCProxyApp extends Application {
@@ -89,10 +94,10 @@ public class OSCProxyApp extends Application {
     private ComboBox<String> outputComboBox;
     private Button manageOutputsButton;
     private CheckBox enableOutputCheckBox;
+    private Button monitorButton;
+    private MonitorWindow currentMonitorWindow;
     private String selectedOutputId = "default";
     
-    // Playback mode controls
-    private CheckBox playbackRewriteCheckBox;
     
     // Application configuration
     private ApplicationConfig appConfig;
@@ -154,16 +159,39 @@ public class OSCProxyApp extends Application {
     public void start(Stage primaryStage) {
         this.primaryStage = primaryStage;
 
-        // Initialize project manager and load last project
+        // Show splash screen for project selection
+        ProjectSplashScreen splashScreen = new ProjectSplashScreen();
+        String selectedProjectName = splashScreen.showAndWait();
+
+        // Exit if user cancelled
+        if (selectedProjectName == null) {
+            Platform.exit();
+            return;
+        }
+
+        // Initialize project manager and load selected project
         projectManager = new ProjectManager();
         try {
-            projectManager.loadLastProject();
+            // Load the selected project
+            Path projectDir = ProjectManager.getProjectsDir().resolve(selectedProjectName);
+            File[] oppFiles = projectDir.toFile().listFiles((dir, name) -> name.endsWith(".opp"));
+            if (oppFiles != null && oppFiles.length > 0) {
+                projectManager.openProject(oppFiles[0]);
+            } else {
+                throw new IOException("Project file not found for: " + selectedProjectName);
+            }
+
             // Set the recordings directory for RecordingSession
             if (projectManager.hasOpenProject()) {
                 RecordingSession.setRecordingsDirectory(projectManager.getRecordingsDir());
             }
+
+            // Set the project manager for ScriptNode instances
+            ScriptNode.setProjectManager(projectManager);
         } catch (IOException e) {
             showError("Error loading project", e.getMessage());
+            Platform.exit();
+            return;
         }
 
         // Load application configuration
@@ -221,11 +249,13 @@ public class OSCProxyApp extends Application {
         manageOutputsButton = new Button("Manage Outputs");
         enableOutputCheckBox = new CheckBox("Enabled");
         enableOutputCheckBox.setSelected(true);
+        monitorButton = new Button("Monitor");
         outputSelectionBox.getChildren().addAll(
             new Label("Output:"),
             outputComboBox,
             manageOutputsButton,
-            enableOutputCheckBox
+            enableOutputCheckBox,
+            monitorButton
         );
         proxyGrid.add(outputSelectionBox, 0, 2, GridPane.REMAINING, 1);
 
@@ -316,18 +346,11 @@ public class OSCProxyApp extends Application {
         audioFileLabel = new Label("No Audio");
         audioControls.getChildren().addAll(selectAudioButton, audioFileLabel);
 
-        // Playback mode controls
-        HBox playbackModeControls = new HBox(10);
-        playbackRewriteCheckBox = new CheckBox("Apply rewrite handlers during playback");
-        playbackRewriteCheckBox.setSelected(false); // Default to WITHOUT_REWRITE
-        playbackModeControls.getChildren().add(playbackRewriteCheckBox);
-
         playbackControls.getChildren().addAll(
                 sessionControls,
                 playbackProgress,
                 playbackStatusLabel,
-                audioControls,
-                playbackModeControls
+                audioControls
         );
 
         // Create Record/Playback tab content
@@ -506,7 +529,11 @@ public class OSCProxyApp extends Application {
         MenuItem saveAsProjectItem = new MenuItem("Save As...");
         saveAsProjectItem.setOnAction(e -> handleSaveAsProject());
 
-        fileMenu.getItems().addAll(newProjectItem, openProjectItem, saveProjectItem, saveAsProjectItem);
+        MenuItem quitItem = new MenuItem("Quit");
+        quitItem.setOnAction(e -> Platform.exit());
+
+        fileMenu.getItems().addAll(newProjectItem, openProjectItem, saveProjectItem, saveAsProjectItem,
+                new SeparatorMenuItem(), quitItem);
         menuBar.getMenus().add(fileMenu);
 
         return menuBar;
@@ -603,10 +630,6 @@ public class OSCProxyApp extends Application {
             if (projectManager.hasOpenProject()) {
                 RecordingSession.setRecordingsDirectory(projectManager.getRecordingsDir());
             }
-
-            // Load playback mode from project config (for backward compatibility)
-            // Note: Playback now always rewrites through all enabled output node chains
-            playbackRewriteCheckBox.setSelected(project.getPlaybackMode() == PlaybackMode.WITH_REWRITE);
 
             // Load outputs
             proxyService.getOutputs().clear();
@@ -782,16 +805,6 @@ public class OSCProxyApp extends Application {
             manager.show();
         });
 
-        // Playback mode event handler
-        // Note: Playback now always rewrites through all enabled output node chains
-        // Checkbox kept for UI backward compatibility but doesn't affect behavior
-        playbackRewriteCheckBox.setOnAction(e -> {
-            PlaybackMode mode = playbackRewriteCheckBox.isSelected() ?
-                PlaybackMode.WITH_REWRITE : PlaybackMode.WITHOUT_REWRITE;
-            appConfig.setPlaybackMode(mode);
-            saveApplicationConfig();
-        });
-
         // Add hover handlers for input fields
         inHostField.setOnMouseEntered(e -> 
             statusBar.setText("Input Host: " + inHostField.getText()));
@@ -849,6 +862,23 @@ public class OSCProxyApp extends Application {
                     (output.isEnabled() ? "enabled" : "disabled"));
                 saveOutputsToConfig();
             }
+        });
+
+        // Monitor button handler
+        monitorButton.setOnAction(e -> {
+            if (currentMonitorWindow != null && currentMonitorWindow.isOpen()) {
+                currentMonitorWindow.close();
+            }
+            currentMonitorWindow = new MonitorWindow(selectedOutputId);
+
+            // Set the monitor window on the output service
+            OSCOutputService output = proxyService.getOutput(selectedOutputId);
+            if (output != null) {
+                output.setMonitorWindow(currentMonitorWindow);
+            }
+
+            currentMonitorWindow.show();
+            log("Opened monitor for output: " + selectedOutputId);
         });
     }
 
@@ -1065,8 +1095,7 @@ public class OSCProxyApp extends Application {
      * Apply loaded configuration to UI controls.
      */
     private void applyConfigurationToUI() {
-        // Set playback mode checkbox
-        playbackRewriteCheckBox.setSelected(appConfig.getPlaybackMode() == PlaybackMode.WITH_REWRITE);
+        // No UI controls to apply currently
     }
 
     /**

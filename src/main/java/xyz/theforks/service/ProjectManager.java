@@ -17,6 +17,7 @@ import java.nio.file.Paths;
  * - {ProjectName}.opp - project configuration file
  * - Recordings/ - directory for recorded sessions
  * - NodeChains/ - directory for node chain configurations
+ * - Scripts/ - directory for JavaScript files used by ScriptNode
  */
 public class ProjectManager {
 
@@ -25,6 +26,7 @@ public class ProjectManager {
     private static final String SETTINGS_FILE = "oscplay.cfg";
     private static final String RECORDINGS_DIR = "Recordings";
     private static final String NODECHAINS_DIR = "NodeChains";
+    private static final String SCRIPTS_DIR = "Scripts";
 
     private final ObjectMapper mapper = new ObjectMapper();
     private AppSettings appSettings;
@@ -97,6 +99,7 @@ public class ProjectManager {
         Files.createDirectories(projectDir);
         Files.createDirectories(projectDir.resolve(RECORDINGS_DIR));
         Files.createDirectories(projectDir.resolve(NODECHAINS_DIR));
+        Files.createDirectories(projectDir.resolve(SCRIPTS_DIR));
 
         // Create project config file
         ProjectConfig config = new ProjectConfig();
@@ -158,6 +161,7 @@ public class ProjectManager {
         Files.createDirectories(newProjectDir);
         Files.createDirectories(newProjectDir.resolve(RECORDINGS_DIR));
         Files.createDirectories(newProjectDir.resolve(NODECHAINS_DIR));
+        Files.createDirectories(newProjectDir.resolve(SCRIPTS_DIR));
 
         // Update project name and save
         currentProject.setProjectName(newProjectName);
@@ -206,6 +210,7 @@ public class ProjectManager {
         }
         Files.createDirectories(currentProjectPath.resolve(RECORDINGS_DIR));
         Files.createDirectories(currentProjectPath.resolve(NODECHAINS_DIR));
+        Files.createDirectories(currentProjectPath.resolve(SCRIPTS_DIR));
     }
 
     /**
@@ -254,5 +259,15 @@ public class ProjectManager {
      */
     public String getCurrentProjectName() {
         return currentProject != null ? currentProject.getProjectName() : null;
+    }
+
+    /**
+     * Get the scripts directory for the current project.
+     */
+    public Path getScriptsDir() {
+        if (currentProjectPath == null) {
+            throw new IllegalStateException("No project is currently open");
+        }
+        return currentProjectPath.resolve(SCRIPTS_DIR);
     }
 }

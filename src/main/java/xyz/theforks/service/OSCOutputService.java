@@ -8,6 +8,7 @@ import com.illposed.osc.OSCSerializeException;
 import com.illposed.osc.transport.OSCPortOut;
 import com.illposed.osc.transport.OSCPortOutBuilder;
 import xyz.theforks.nodes.NodeChain;
+import xyz.theforks.ui.MonitorWindow;
 
 public class OSCOutputService {
     private final String id;
@@ -16,6 +17,7 @@ public class OSCOutputService {
     private int outPort;
     private final NodeChain nodeChain;
     private boolean enabled = true;
+    private MonitorWindow monitorWindow;
 
     public OSCOutputService(String id) {
         this.id = id;
@@ -50,6 +52,11 @@ public class OSCOutputService {
         OSCMessage processedMessage = nodeChain.processMessage(message);
         if (processedMessage != null) {
             sender.send(processedMessage);
+
+            // Send to monitor window if one is open
+            if (monitorWindow != null && monitorWindow.isOpen()) {
+                monitorWindow.addMessage(processedMessage);
+            }
         }
     }
 
@@ -89,5 +96,13 @@ public class OSCOutputService {
 
     public boolean isStarted() {
         return sender != null;
+    }
+
+    public void setMonitorWindow(MonitorWindow monitorWindow) {
+        this.monitorWindow = monitorWindow;
+    }
+
+    public MonitorWindow getMonitorWindow() {
+        return monitorWindow;
     }
 }

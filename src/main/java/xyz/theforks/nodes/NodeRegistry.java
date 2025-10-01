@@ -7,7 +7,10 @@ public class NodeRegistry {
         new RenameNode(),
         new MovingAvgNode(),
         new IntToBangNode(),
-        new PathTrimNode()
+        new PathTrimNode(),
+        new DropNode(),
+        new PassNode(),
+        new ScriptNode()
     };
 
     public static OSCNode[] getNodes() {

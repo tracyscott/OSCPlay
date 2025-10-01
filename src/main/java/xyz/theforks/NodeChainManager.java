@@ -15,7 +15,9 @@ import com.google.gson.JsonObject;
 
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
@@ -29,6 +31,7 @@ import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.stage.FileChooser;
+import javafx.stage.Stage;
 import xyz.theforks.Playback;
 import xyz.theforks.nodes.OSCNode;
 import xyz.theforks.nodes.NodeRegistry;
@@ -36,6 +39,7 @@ import xyz.theforks.service.OSCOutputService;
 import xyz.theforks.service.OSCProxyService;
 import xyz.theforks.service.ProjectManager;
 import xyz.theforks.ui.Theme;
+import xyz.theforks.ui.NodeChainDebugWindow;
 import xyz.theforks.util.DataDirectory;
 
 public class NodeChainManager {
@@ -51,6 +55,7 @@ public class NodeChainManager {
     private Label nodesLabel;
     private String outputId = "default"; // Current output being managed
     private Runnable onNodeChainChanged; // Callback when node chain changes
+    private NodeChainDebugWindow currentDebugWindow;
 
     public NodeChainManager(OSCProxyService proxyService, TextArea logArea, Label statusBar) {
         this.proxyService = proxyService;
@@ -113,6 +118,23 @@ public class NodeChainManager {
             activeNodes.addAll(nodes);
         }
         updateNodesLabel();
+    }
+
+    /**
+     * Rebuild the node chain from the active nodes list to maintain proper order.
+     * This should be called whenever the order or enabled state changes.
+     */
+    private void rebuildNodeChain() {
+        OSCOutputService output = proxyService.getOutput(outputId);
+        if (output != null) {
+            // Clear the node chain
+            output.getNodeChain().clearNodes();
+
+            // Re-register all nodes in order from the ListView
+            for (OSCNode node : activeNodes) {
+                output.getNodeChain().registerNode(node);
+            }
+        }
     }
 
     public void createUI(GridPane grid, int startRow) {
@@ -180,12 +202,17 @@ public class NodeChainManager {
         // Add event handler for checkbox to enable/disable node
         enabledCheck.setOnAction(e -> {
             if (enabledCheck.isSelected()) {
-                proxyService.registerNode(outputId, node);
+                // Add node back to the list at its current position if not already there
+                if (!activeNodes.contains(node)) {
+                    activeNodes.add(index, node);
+                }
                 log("Enabled " + node.label() + " for output " + outputId);
             } else {
-                proxyService.unregisterNode(outputId, node);
+                // Remove node from the list
+                activeNodes.remove(node);
                 log("Disabled " + node.label() + " for output " + outputId);
             }
+            rebuildNodeChain();
             notifyNodeChainChanged();
         });
 
@@ -226,11 +253,8 @@ public class NodeChainManager {
             }
             try {
                 if (node.configure(args)) {
-                    if (enabledCheck.isSelected()) {
-                        // Re-register node to apply new configuration
-                        proxyService.unregisterNode(outputId, node);
-                        proxyService.registerNode(outputId, node);
-                    }
+                    // Rebuild chain to apply new configuration while maintaining order
+                    rebuildNodeChain();
                     log("Updated configuration for " + node.label() + " on output " + outputId);
                     notifyNodeChainChanged();
                 } else {
@@ -249,13 +273,12 @@ public class NodeChainManager {
 
         upBtn.setOnAction(e -> {
             if (index > 0) {
-                // Update list
+                // Update list order
                 OSCNode current = activeNodes.remove(index);
                 activeNodes.add(index - 1, current);
 
-                // Update service
-                proxyService.unregisterNode(outputId, current);
-                proxyService.registerNode(outputId, current);
+                // Rebuild chain to reflect new order
+                rebuildNodeChain();
 
                 nodesListView.getSelectionModel().select(index - 1);
                 notifyNodeChainChanged();
@@ -264,13 +287,12 @@ public class NodeChainManager {
 
         downBtn.setOnAction(e -> {
             if (index < activeNodes.size() - 1) {
-                // Update list
+                // Update list order
                 OSCNode current = activeNodes.remove(index);
                 activeNodes.add(index + 1, current);
 
-                // Update service
-                proxyService.unregisterNode(outputId, current);
-                proxyService.registerNode(outputId, current);
+                // Rebuild chain to reflect new order
+                rebuildNodeChain();
 
                 nodesListView.getSelectionModel().select(index + 1);
                 notifyNodeChainChanged();
@@ -294,6 +316,7 @@ public class NodeChainManager {
         Button loadButton = new Button("Load");
         Button addNode = new Button("Add");
         Button removeNode = new Button("Remove");
+        Button debugButton = new Button("Debug");
         Button saveButton = new Button("Save");
         Button saveAsButton = new Button("Save As");
 
@@ -303,6 +326,7 @@ public class NodeChainManager {
         loadButton.setPrefWidth(buttonWidth);
         addNode.setPrefWidth(buttonWidth);
         removeNode.setPrefWidth(buttonWidth);
+        debugButton.setPrefWidth(buttonWidth);
         saveButton.setPrefWidth(buttonWidth);
         saveAsButton.setPrefWidth(buttonWidth);
 
@@ -338,6 +362,7 @@ public class NodeChainManager {
 
         addNode.setOnAction(e -> showAddNodeDialog());
         removeNode.setOnAction(e -> removeSelectedNode());
+        debugButton.setOnAction(e -> openDebugWindow());
         saveButton.setOnAction(e -> {
             if (currentConfigFile == null) {
                 saveAsNode();
@@ -347,10 +372,10 @@ public class NodeChainManager {
         });
         saveAsButton.setOnAction(e -> saveAsNode());
 
-        // Create left-aligned container for Add/Remove buttons
+        // Create left-aligned container for Add/Remove/Debug buttons
         HBox leftButtons = new HBox(10);
         leftButtons.setAlignment(Pos.CENTER_LEFT);
-        leftButtons.getChildren().addAll(addNode, removeNode);
+        leftButtons.getChildren().addAll(addNode, removeNode, debugButton);
 
         // Create right-aligned container for file operation buttons
         HBox rightButtons = new HBox(10);
@@ -384,8 +409,20 @@ public class NodeChainManager {
                     try {
                         // Create new instance of same node type
                         OSCNode newNode = node.getClass().getDeclaredConstructor().newInstance();
-                        activeNodes.add(newNode);
-                        notifyNodeChainChanged();
+
+                        // Show argument configuration dialog if node has arguments
+                        if (newNode.getNumArgs() > 0) {
+                            if (showNodeConfigDialog(newNode)) {
+                                activeNodes.add(newNode);
+                                rebuildNodeChain();
+                                notifyNodeChainChanged();
+                            }
+                        } else {
+                            // No arguments needed, add directly
+                            activeNodes.add(newNode);
+                            rebuildNodeChain();
+                            notifyNodeChainChanged();
+                        }
                     } catch (Exception ex) {
                         showError("Error", "Could not create node: " + ex.getMessage());
                     }
@@ -395,11 +432,92 @@ public class NodeChainManager {
         });
     }
 
+    /**
+     * Show configuration dialog for a node's arguments.
+     * @param node The node to configure
+     * @return true if configuration was successful and dialog was confirmed, false if cancelled
+     */
+    private boolean showNodeConfigDialog(OSCNode node) {
+        Stage stage = new Stage();
+        stage.setTitle("Configure " + node.label() + " Node");
+
+        GridPane grid = new GridPane();
+        grid.setPadding(new Insets(15));
+        grid.setHgap(10);
+        grid.setVgap(10);
+
+        // Create text fields for each argument
+        String[] argNames = node.getArgNames();
+        TextField[] argFields = new TextField[node.getNumArgs()];
+
+        for (int i = 0; i < node.getNumArgs(); i++) {
+            // Argument name label on one line
+            Label nameLabel = new Label(argNames[i] + ":");
+            grid.add(nameLabel, 0, i * 2, 2, 1);
+
+            // Argument value field on next line
+            TextField field = new TextField();
+            field.setPrefWidth(400);
+            argFields[i] = field;
+            grid.add(field, 0, i * 2 + 1, 2, 1);
+        }
+
+        // Button row
+        javafx.scene.layout.HBox buttonBox = new javafx.scene.layout.HBox(10);
+        buttonBox.setAlignment(Pos.CENTER_RIGHT);
+
+        Button okButton = new Button("OK");
+        Button cancelButton = new Button("Cancel");
+
+        buttonBox.getChildren().addAll(cancelButton, okButton);
+        grid.add(buttonBox, 0, node.getNumArgs() * 2, 2, 1);
+
+        // Status label for errors
+        Label statusLabel = new Label();
+        statusLabel.setWrapText(true);
+        statusLabel.setMaxWidth(400);
+        grid.add(statusLabel, 0, node.getNumArgs() * 2 + 1, 2, 1);
+
+        final boolean[] confirmed = {false};
+
+        okButton.setOnAction(e -> {
+            String[] args = new String[node.getNumArgs()];
+            for (int i = 0; i < args.length; i++) {
+                args[i] = argFields[i].getText();
+            }
+
+            try {
+                if (node.configure(args)) {
+                    confirmed[0] = true;
+                    stage.close();
+                } else {
+                    statusLabel.setText("Configuration failed. Please check your input.");
+                    statusLabel.setStyle("-fx-text-fill: red;");
+                }
+            } catch (Exception ex) {
+                statusLabel.setText("Error: " + ex.getMessage());
+                statusLabel.setStyle("-fx-text-fill: red;");
+            }
+        });
+
+        cancelButton.setOnAction(e -> {
+            confirmed[0] = false;
+            stage.close();
+        });
+
+        Scene scene = new Scene(grid);
+        Theme.applyDark(scene);
+        stage.setScene(scene);
+        stage.showAndWait();
+
+        return confirmed[0];
+    }
+
     private void removeSelectedNode() {
         OSCNode selected = nodesListView.getSelectionModel().getSelectedItem();
         if (selected != null) {
-            proxyService.unregisterNode(outputId, selected);
             activeNodes.remove(selected);
+            rebuildNodeChain();
             notifyNodeChainChanged();
         }
     }
@@ -497,12 +615,10 @@ public class NodeChainManager {
 
                 activeNodes.add(node);
                 log("Added node to activeNodes list: " + node.label());
-
-                if (enabled) {
-                    proxyService.registerNode(outputId, node);
-                    log("Registered node with output " + outputId + ": " + node.label());
-                }
             }
+
+            // Rebuild the node chain from the loaded nodes
+            rebuildNodeChain();
 
             currentConfigFile = filename;
             updateNodesLabel();
@@ -525,5 +641,24 @@ public class NodeChainManager {
     private void log(String message) {
         logArea.appendText(message + "\n");
         logArea.setScrollTop(Double.MAX_VALUE);
+    }
+
+    /**
+     * Open the debug window for the current output's node chain.
+     */
+    private void openDebugWindow() {
+        if (currentDebugWindow != null && currentDebugWindow.isOpen()) {
+            currentDebugWindow.close();
+        }
+        currentDebugWindow = new NodeChainDebugWindow(outputId);
+
+        // Set the debug window on the output service's node chain
+        OSCOutputService output = proxyService.getOutput(outputId);
+        if (output != null) {
+            output.getNodeChain().setDebugWindow(currentDebugWindow);
+        }
+
+        currentDebugWindow.show();
+        log("Opened debug window for output: " + outputId);
     }
 }

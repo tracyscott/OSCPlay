@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import com.illposed.osc.OSCMessage;
+import xyz.theforks.ui.NodeChainDebugWindow;
 
 /**
  * Centralized engine for applying node chains to OSC messages.
@@ -22,6 +23,7 @@ public class NodeChain {
     private final CopyOnWriteArrayList<OSCNode> nodes;
     private volatile boolean enabled;
     private final Context context;
+    private volatile NodeChainDebugWindow debugWindow;
 
     public NodeChain(Context context) {
         this.context = context;
@@ -39,12 +41,23 @@ public class NodeChain {
             return message;
         }
 
+        // Debug: log raw input
+        if (debugWindow != null && debugWindow.isOpen()) {
+            debugWindow.addRawMessage(message);
+        }
+
         OSCMessage processedMessage = message;
         String address = message.getAddress();
 
         for (OSCNode node : nodes) {
             if (address.matches(node.getAddressPattern())) {
                 processedMessage = node.process(processedMessage);
+
+                // Debug: log node output
+                if (debugWindow != null && debugWindow.isOpen()) {
+                    debugWindow.addNodeOutput(node.label(), processedMessage);
+                }
+
                 if (processedMessage == null) {
                     return null; // Node cancelled the message
                 }
@@ -131,5 +144,22 @@ public class NodeChain {
      */
     public int getNodeCount() {
         return nodes.size();
+    }
+
+    /**
+     * Set the debug window for this node chain.
+     * When set, the chain will log each processing step to the window.
+     * @param debugWindow The debug window, or null to disable debugging
+     */
+    public void setDebugWindow(NodeChainDebugWindow debugWindow) {
+        this.debugWindow = debugWindow;
+    }
+
+    /**
+     * Get the current debug window.
+     * @return The debug window, or null if not set
+     */
+    public NodeChainDebugWindow getDebugWindow() {
+        return debugWindow;
     }
 }

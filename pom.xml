@@ -65,6 +65,18 @@
             <version>5.9.2</version>
             <scope>test</scope>
         </dependency>
+
+        <!-- GraalVM JavaScript for ScriptNode -->
+        <dependency>
+            <groupId>org.graalvm.js</groupId>
+            <artifactId>js</artifactId>
+            <version>23.0.2</version>
+        </dependency>
+        <dependency>
+            <groupId>org.graalvm.js</groupId>
+            <artifactId>js-scriptengine</artifactId>
+            <version>23.0.2</version>
+        </dependency>
     </dependencies>
 
     <build>
