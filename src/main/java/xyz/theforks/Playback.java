@@ -245,6 +245,13 @@ public class Playback {
         if (playbackThread != null) {
             playbackThread.interrupt();
         }
+        if (mediaPlayer != null) {
+            Platform.runLater(() -> {
+                mediaPlayer.stop();
+                mediaPlayer.dispose();
+                mediaPlayer = null;
+            });
+        }
     }
 
     /**

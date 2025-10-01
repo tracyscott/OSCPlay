@@ -1,11 +1,13 @@
 package xyz.theforks.model;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 /**
  * Represents configuration for a single sampler pad.
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class SamplerPad {
     private final String sessionName;
     private final String label;

@@ -22,11 +22,20 @@ public class DataDirectory {
     public static final String CONFIG_SUBDIR = "config";
 
     private static Path baseDataDir;
+    private static Path testOverrideDir = null;
 
     static {
-        // Initialize base data directory
-        String userHome = System.getProperty("user.home");
-        baseDataDir = Paths.get(userHome, BASE_DIR_NAME, APP_NAME);
+        initializeBaseDir();
+    }
+
+    private static void initializeBaseDir() {
+        if (testOverrideDir != null) {
+            baseDataDir = testOverrideDir;
+        } else {
+            // Initialize base data directory
+            String userHome = System.getProperty("user.home");
+            baseDataDir = Paths.get(userHome, BASE_DIR_NAME, APP_NAME);
+        }
 
         // Create base directory if it doesn't exist
         File baseDirFile = baseDataDir.toFile();
@@ -161,5 +170,14 @@ public class DataDirectory {
      */
     public static File getConfigDirFile() {
         return getConfigDir().toFile();
+    }
+
+    /**
+     * Set a test override directory. This should only be used in unit tests.
+     * @param testDir The temporary directory to use for testing, or null to reset to default
+     */
+    public static void setTestOverrideDir(Path testDir) {
+        testOverrideDir = testDir;
+        initializeBaseDir();
     }
 }

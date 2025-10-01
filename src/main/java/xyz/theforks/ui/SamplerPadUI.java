@@ -32,6 +32,7 @@ public class SamplerPadUI extends VBox {
     private final GridPane padGrid;
     private final Map<Integer, SamplerPad> pads;
     private final Map<Integer, Button> padButtons;
+    private final Map<Integer, Integer> activePads; // Maps padIndex to playing state
     private final ObjectMapper mapper;
 
     public SamplerPadUI(OSCProxyService proxyService, Playback playback, TextArea logArea) {
@@ -40,7 +41,18 @@ public class SamplerPadUI extends VBox {
         this.logArea = logArea;
         this.pads = new HashMap<>();
         this.padButtons = new HashMap<>();
+        this.activePads = new HashMap<>();
         this.mapper = new ObjectMapper();
+
+        // Listen to playback state changes
+        playback.isPlayingProperty().addListener((obs, wasPlaying, isPlaying) -> {
+            if (!isPlaying) {
+                // Playback stopped - restore all active pad colors
+                for (Integer padIndex : new HashMap<>(activePads).keySet()) {
+                    restorePadColor(padIndex);
+                }
+            }
+        });
 
         setPadding(new Insets(10));
         setSpacing(10);
@@ -114,6 +126,14 @@ public class SamplerPadUI extends VBox {
     }
 
     private void playPad(int padIndex) {
+        // Check if this pad is currently playing - if so, stop it
+        if (activePads.containsKey(padIndex)) {
+            playback.stopPlayback();
+            restorePadColor(padIndex);
+            log("Stopped pad " + padIndex);
+            return;
+        }
+
         SamplerPad pad = pads.get(padIndex);
         if (pad == null || pad.isEmpty()) {
             log("Pad " + padIndex + " is empty");
@@ -126,9 +146,28 @@ public class SamplerPadUI extends VBox {
             return;
         }
 
+        // Change button to dark red
+        Button button = padButtons.get(padIndex);
+        activePads.put(padIndex, padIndex);
+        button.setStyle("-fx-background-color: #8B0000; -fx-text-fill: white; -fx-font-size: 14px;");
+
         playback.setOutputService(outputService);
         playback.playSession(pad.getSessionName());
         log("Playing pad " + padIndex + ": " + pad.getSessionName());
+    }
+
+    private void restorePadColor(int padIndex) {
+        activePads.remove(padIndex);
+        SamplerPad pad = pads.get(padIndex);
+        Button button = padButtons.get(padIndex);
+
+        if (pad != null && !pad.isEmpty()) {
+            button.setStyle(String.format(
+                    "-fx-background-color: %s; -fx-text-fill: white; -fx-font-size: 14px;",
+                    pad.getColor()));
+        } else {
+            button.setStyle("-fx-background-color: #888888; -fx-text-fill: white; -fx-font-size: 14px;");
+        }
     }
 
     private void configurePad(int padIndex) {
