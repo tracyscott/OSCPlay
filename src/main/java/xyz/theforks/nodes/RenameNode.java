@@ -1,4 +1,4 @@
-package xyz.theforks.rewrite;
+package xyz.theforks.nodes;
 
 import java.util.Arrays;
 import java.util.regex.Pattern;
@@ -15,7 +15,7 @@ import javafx.scene.layout.GridPane;
 import javafx.scene.paint.Color;
 import javafx.stage.Stage;
 
-public class RenameHandler implements RewriteHandler {
+public class RenameNode implements OSCNode {
     private String addressPattern;
     private String regex;
     private Pattern regexPattern;
@@ -56,7 +56,7 @@ public class RenameHandler implements RewriteHandler {
     public boolean configure(String[] args) {
         // Requires one argument that is the address pattern to match.
         if (args.length != 3) {
-            throw new IllegalArgumentException("RenameHandler requires three arguments");
+            throw new IllegalArgumentException("RenameNode requires three arguments");
         }
         addressPattern = args[0];
         regex = args[1];
@@ -81,7 +81,7 @@ public class RenameHandler implements RewriteHandler {
 	@Override
 	public void showPreferences() {
 	    Stage stage = new Stage();
-	    stage.setTitle("Rename Handler Preferences");
+	    stage.setTitle("Rename Node Preferences");
 
 	    GridPane grid = new GridPane();
 	    grid.setPadding(new Insets(10));

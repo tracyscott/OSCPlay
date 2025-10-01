@@ -33,8 +33,10 @@ import javafx.stage.FileChooser;
 import javafx.stage.FileChooser.ExtensionFilter;
 import javafx.stage.Stage;
 import xyz.theforks.model.ApplicationConfig;
+import xyz.theforks.model.NodeChainConfig;
+import xyz.theforks.model.OutputConfig;
 import xyz.theforks.model.PlaybackMode;
-import xyz.theforks.model.RecordingMode;
+import xyz.theforks.nodes.OSCNode;
 import xyz.theforks.service.OSCInputService;
 import xyz.theforks.service.OSCOutputService;
 import xyz.theforks.service.OSCProxyService;
@@ -44,6 +46,7 @@ import xyz.theforks.util.DataDirectory;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.File;
+import java.util.List;
 
 public class OSCProxyApp extends Application {
 
@@ -70,14 +73,18 @@ public class OSCProxyApp extends Application {
     private Button openPadsButton;
     private Stage padWindow;
     private Sampler sampler;
-    
+
     private ToggleButton proxyToggleButton;
     private Label statusBar;
     private Playback playback;
+
+    // Multi-output controls
+    private ComboBox<String> outputComboBox;
+    private Button manageOutputsButton;
+    private CheckBox enableOutputCheckBox;
+    private String selectedOutputId = "default";
     
-    // Recording/Playback mode controls
-    private RadioButton preRewriteRadio;
-    private RadioButton postRewriteRadio;
+    // Playback mode controls
     private CheckBox playbackRewriteCheckBox;
     
     // Application configuration
@@ -93,7 +100,7 @@ public class OSCProxyApp extends Application {
     private static boolean cliMode = false;
 
     // Add fields
-    private RewriteHandlerManager handlerManager;
+    private NodeChainManager nodeChainManager;
 
     public static void main(String[] args) {
         // Parse command line arguments
@@ -138,15 +145,17 @@ public class OSCProxyApp extends Application {
     public void start(Stage primaryStage) {
         // Load application configuration
         loadApplicationConfig();
-        
+
         // Currently we can only have one playback operation at a time so we have a single instance
         // here.  The various playback/stop playback buttons will control this instance.
         playback = new Playback();
         proxyService = new OSCProxyService();
-        
+
         // Apply loaded configuration
-        proxyService.setRecordingMode(appConfig.getRecordingMode());
         playback.setPlaybackMode(appConfig.getPlaybackMode());
+
+        // Load outputs from configuration
+        loadOutputsFromConfig();
 
         // Create UI components
         GridPane grid = new GridPane();
@@ -173,35 +182,56 @@ public class OSCProxyApp extends Application {
         inPortField.setStyle("-fx-font-size: 11px;");
         proxyGrid.add(inPortField, 2, 0);
 
-        Label outLabel = new Label("Out");
-        outLabel.setMinWidth(20);
-        proxyGrid.add(outLabel, 0, 1);
-        outHostField = new TextField(outHost);
-        outHostField.setMinWidth(500);  // Doubled from 250
-        outHostField.setStyle("-fx-font-size: 11px;");
-        proxyGrid.add(outHostField, 1, 1);
-        outPortField = new TextField("" + outPort);
-        outPortField.setMaxWidth(200);  // Doubled from 100
-        outPortField.setStyle("-fx-font-size: 11px;");
-        proxyGrid.add(outPortField, 2, 1);
-
-        // Create the logArea so we can pass it to RewriteHandlerManager
-        logArea = new TextArea();
-        // Create the status bar so we can pass it to RewriteHandlerManager
-        statusBar = new Label();
-        
-        // Control buttons - Enable Proxy comes before rewrite handlers
+         // Control buttons - Enable Proxy comes before rewrite handlers
         proxyToggleButton = new ToggleButton("Enable Proxy");
         proxyToggleButton.setSelected(true);
         proxyToggleButton.setMinWidth(120);
-        proxyGrid.add(proxyToggleButton, 0, 2, GridPane.REMAINING, 1);
+        proxyGrid.add(proxyToggleButton, 0, 1, GridPane.REMAINING, 1);
 
-        // Rewrite handlers section (below proxy toggle)
-        handlerManager = new RewriteHandlerManager(proxyService, logArea, statusBar);
-        handlerManager.createUI(proxyGrid, 4);
-        
-        // Connect the playback instance to the handler manager for synchronization
-        handlerManager.setPlayback(playback);
+        // Output selection and management (row 2)
+        HBox outputSelectionBox = new HBox(10);
+        outputComboBox = new ComboBox<>();
+        outputComboBox.setPromptText("Select Output");
+        outputComboBox.setMinWidth(200);
+        manageOutputsButton = new Button("Manage Outputs");
+        enableOutputCheckBox = new CheckBox("Enabled");
+        enableOutputCheckBox.setSelected(true);
+        outputSelectionBox.getChildren().addAll(
+            new Label("Output:"),
+            outputComboBox,
+            manageOutputsButton,
+            enableOutputCheckBox
+        );
+        proxyGrid.add(outputSelectionBox, 0, 2, GridPane.REMAINING, 1);
+
+        // Output configuration (row 3)
+        Label outLabel = new Label("Out");
+        outLabel.setMinWidth(20);
+        proxyGrid.add(outLabel, 0, 3);
+        outHostField = new TextField(outHost);
+        outHostField.setMinWidth(500);  // Doubled from 250
+        outHostField.setStyle("-fx-font-size: 11px;");
+        proxyGrid.add(outHostField, 1, 3);
+        outPortField = new TextField("" + outPort);
+        outPortField.setMaxWidth(200);  // Doubled from 100
+        outPortField.setStyle("-fx-font-size: 11px;");
+        proxyGrid.add(outPortField, 2, 3);
+
+        // Create the logArea so we can pass it to NodeChainManager
+        logArea = new TextArea();
+        // Create the status bar so we can pass it to NodeChainManager
+        statusBar = new Label();
+
+
+        // Node chain section (below output config, row 4)
+        nodeChainManager = new NodeChainManager(proxyService, logArea, statusBar);
+        nodeChainManager.createUI(proxyGrid, 5);
+
+        // Connect the playback instance to the node chain manager for synchronization
+        nodeChainManager.setPlayback(playback);
+
+        // Set callback to save config when node chain changes
+        nodeChainManager.setOnNodeChainChanged(this::saveOutputsToConfig);
 
         // Configure column constraints to make the middle column expand
         ColumnConstraints col0 = new ColumnConstraints(); // Label column
@@ -220,25 +250,13 @@ public class OSCProxyApp extends Application {
         TabPane tabPane = new TabPane();
         tabPane.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
 
-        // Recording controls
+        // Recording controls (always records raw input)
         VBox recordingSection = new VBox(5);
         HBox recordingControls = new HBox(10);
         recordButton = new Button("Start Recording");
         messageCountLabel = new Label("Messages: 0");
         recordingControls.getChildren().addAll(recordButton, messageCountLabel);
-
-        // Recording mode controls
-        HBox recordingModeControls = new HBox(10);
-        Label recordingModeLabel = new Label("Recording mode:");
-        ToggleGroup recordingModeGroup = new ToggleGroup();
-        preRewriteRadio = new RadioButton("Record Original Messages");
-        postRewriteRadio = new RadioButton("Record Processed Messages");
-        preRewriteRadio.setToggleGroup(recordingModeGroup);
-        postRewriteRadio.setToggleGroup(recordingModeGroup);
-        preRewriteRadio.setSelected(true); // Default to PRE_REWRITE
-        recordingModeControls.getChildren().addAll(recordingModeLabel, preRewriteRadio, postRewriteRadio);
-
-        recordingSection.getChildren().addAll(recordingControls, recordingModeControls);
+        recordingSection.getChildren().add(recordingControls);
 
         // Playback controls
         VBox playbackControls = new VBox(10);
@@ -415,6 +433,11 @@ public class OSCProxyApp extends Application {
         // Update sessions list
         updateSessionsList();
 
+        // Initialize outputs list and select default
+        updateOutputsList();
+        outputComboBox.getSelectionModel().select("default");
+        updateOutputFields();
+
         // Start proxy by default since toggle is selected
         try {
             proxyService.setInHost(inHostField.getText());
@@ -553,20 +576,7 @@ public class OSCProxyApp extends Application {
             ManageRecordings manager = new ManageRecordings(proxyService);
             manager.show();
         });
-        
-        // Recording mode event handlers
-        preRewriteRadio.setOnAction(e -> {
-            proxyService.setRecordingMode(RecordingMode.PRE_REWRITE);
-            appConfig.setRecordingMode(RecordingMode.PRE_REWRITE);
-            saveApplicationConfig();
-        });
-        
-        postRewriteRadio.setOnAction(e -> {
-            proxyService.setRecordingMode(RecordingMode.POST_REWRITE);
-            appConfig.setRecordingMode(RecordingMode.POST_REWRITE);
-            saveApplicationConfig();
-        });
-        
+
         // Playback mode event handler
         playbackRewriteCheckBox.setOnAction(e -> {
             PlaybackMode mode = playbackRewriteCheckBox.isSelected() ? 
@@ -602,6 +612,38 @@ public class OSCProxyApp extends Application {
         setupFieldEditFeedback(inPortField);
         setupFieldEditFeedback(outHostField);
         setupFieldEditFeedback(outPortField);
+
+        // Output selection handler
+        outputComboBox.setOnAction(e -> {
+            String selected = outputComboBox.getSelectionModel().getSelectedItem();
+            if (selected != null) {
+                selectedOutputId = selected;
+                updateOutputFields();
+                nodeChainManager.setOutputId(selectedOutputId);
+                log("Selected output: " + selected);
+            }
+        });
+
+        // Manage outputs button handler
+        manageOutputsButton.setOnAction(e -> {
+            MultiOutputManager manager = new MultiOutputManager(
+                    proxyService,
+                    this::updateOutputsList,
+                    this::saveOutputsToConfig
+            );
+            manager.show();
+        });
+
+        // Enable/disable output handler
+        enableOutputCheckBox.setOnAction(e -> {
+            OSCOutputService output = proxyService.getOutput(selectedOutputId);
+            if (output != null) {
+                output.setEnabled(enableOutputCheckBox.isSelected());
+                log("Output '" + selectedOutputId + "' " +
+                    (output.isEnabled() ? "enabled" : "disabled"));
+                saveOutputsToConfig();
+            }
+        });
     }
 
     /**
@@ -644,15 +686,21 @@ public class OSCProxyApp extends Application {
             // Stop the current proxy (safe to call even if not running)
             proxyService.stopProxy();
 
-            // Update settings and restart
+            // Update input settings
             proxyService.setInHost(inHostField.getText());
             proxyService.setInPort(Integer.parseInt(inPortField.getText()));
-            proxyService.setOutHost(outHostField.getText());
-            proxyService.setOutPort(Integer.parseInt(outPortField.getText()));
+
+            // Update selected output settings
+            OSCOutputService output = proxyService.getOutput(selectedOutputId);
+            if (output != null) {
+                output.setOutHost(outHostField.getText());
+                output.setOutPort(Integer.parseInt(outPortField.getText()));
+            }
+
             proxyService.startProxy();
 
-            log("Proxy started with settings - In: " + inHostField.getText() + ":" +
-                inPortField.getText() + " Out: " + outHostField.getText() + ":" + outPortField.getText());
+            log("Proxy started - In: " + inHostField.getText() + ":" + inPortField.getText() +
+                " Out[" + selectedOutputId + "]: " + outHostField.getText() + ":" + outPortField.getText());
 
             // Clear any error styling on all proxy fields
             inHostField.setStyle(baseStyle);
@@ -664,6 +712,9 @@ public class OSCProxyApp extends Application {
             proxyToggleButton.setSelected(true);
             proxyToggleButton.setText("Disable Proxy");
             statusBar.setText("");
+
+            // Save updated configuration
+            saveOutputsToConfig();
         } catch (NumberFormatException ex) {
             String errorMsg = "Invalid port number: " + changedField.getText();
             log("ERROR: " + errorMsg);
@@ -694,6 +745,44 @@ public class OSCProxyApp extends Application {
     private void updateSessionsList() {
         sessionComboBox.getItems().clear();
         sessionComboBox.getItems().addAll(proxyService.getRecordedSessions());
+    }
+
+    /**
+     * Updates the outputs ComboBox with current outputs from the service.
+     */
+    private void updateOutputsList() {
+        String currentSelection = outputComboBox.getSelectionModel().getSelectedItem();
+        outputComboBox.getItems().clear();
+
+        for (OSCOutputService output : proxyService.getOutputs()) {
+            outputComboBox.getItems().add(output.getId());
+        }
+
+        // Restore selection if still exists, otherwise select first
+        if (currentSelection != null && outputComboBox.getItems().contains(currentSelection)) {
+            outputComboBox.getSelectionModel().select(currentSelection);
+        } else if (!outputComboBox.getItems().isEmpty()) {
+            outputComboBox.getSelectionModel().selectFirst();
+            selectedOutputId = outputComboBox.getItems().get(0);
+        }
+    }
+
+    /**
+     * Updates the output fields (host/port/enabled) based on selected output.
+     */
+    private void updateOutputFields() {
+        final String baseStyle = "-fx-font-size: 11px;";
+
+        OSCOutputService output = proxyService.getOutput(selectedOutputId);
+        if (output != null) {
+            outHostField.setText(output.getOutHost() != null ? output.getOutHost() : "127.0.0.1");
+            outPortField.setText(String.valueOf(output.getOutPort()));
+            enableOutputCheckBox.setSelected(output.isEnabled());
+
+            // Clear any "edited" styling when switching outputs
+            outHostField.setStyle(baseStyle);
+            outPortField.setStyle(baseStyle);
+        }
     }
 
     private void showError(String title, String content) {
@@ -760,20 +849,111 @@ public class OSCProxyApp extends Application {
      * Apply loaded configuration to UI controls.
      */
     private void applyConfigurationToUI() {
-        // Set recording mode radio buttons
-        if (appConfig.getRecordingMode() == RecordingMode.PRE_REWRITE) {
-            preRewriteRadio.setSelected(true);
-        } else {
-            postRewriteRadio.setSelected(true);
-        }
-        
         // Set playback mode checkbox
         playbackRewriteCheckBox.setSelected(appConfig.getPlaybackMode() == PlaybackMode.WITH_REWRITE);
     }
-    
+
+    /**
+     * Load outputs from application config and apply to proxy service.
+     */
+    private void loadOutputsFromConfig() {
+        for (OutputConfig outputConfig : appConfig.getOutputs()) {
+            // Skip default - it already exists
+            if ("default".equals(outputConfig.getId())) {
+                // Update default output settings
+                OSCOutputService defaultOutput = proxyService.getOutput("default");
+                if (defaultOutput != null) {
+                    defaultOutput.setOutHost(outputConfig.getHost());
+                    defaultOutput.setOutPort(outputConfig.getPort());
+                    defaultOutput.setEnabled(outputConfig.isEnabled());
+                    // Load node chain for default output
+                    loadNodeChainForOutput(defaultOutput, outputConfig.getNodeChain());
+                }
+            } else {
+                // Create new output
+                OSCOutputService output = new OSCOutputService(outputConfig.getId());
+                output.setOutHost(outputConfig.getHost());
+                output.setOutPort(outputConfig.getPort());
+                output.setEnabled(outputConfig.isEnabled());
+                proxyService.addOutput(output);
+                // Load node chain for this output
+                loadNodeChainForOutput(output, outputConfig.getNodeChain());
+            }
+        }
+    }
+
+    /**
+     * Load and apply a node chain configuration to an output.
+     */
+    private void loadNodeChainForOutput(OSCOutputService output, NodeChainConfig chainConfig) {
+        if (chainConfig == null || chainConfig.getNodes() == null) {
+            return;
+        }
+
+        for (NodeChainConfig.NodeConfig nodeConfig : chainConfig.getNodes()) {
+            try {
+                // Instantiate node
+                Class<?> nodeClass = Class.forName(nodeConfig.getType());
+                OSCNode node = (OSCNode) nodeClass.getDeclaredConstructor().newInstance();
+
+                // Configure node with args
+                String[] args = nodeConfig.getArgs().toArray(new String[0]);
+                if (node.configure(args)) {
+                    // Register if enabled
+                    if (nodeConfig.isEnabled()) {
+                        proxyService.registerNode(output.getId(), node);
+                    }
+                } else {
+                    log("Warning: Failed to configure node " + nodeConfig.getType());
+                }
+            } catch (Exception e) {
+                log("Error loading node " + nodeConfig.getType() + ": " + e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Save current outputs configuration to app config.
+     */
+    public void saveOutputsToConfig() {
+        appConfig.getOutputs().clear();
+
+        for (OSCOutputService output : proxyService.getOutputs()) {
+            OutputConfig outputConfig = new OutputConfig(
+                    output.getId(),
+                    output.getOutHost(),
+                    output.getOutPort(),
+                    output.isEnabled(),
+                    saveNodeChainForOutput(output)
+            );
+            appConfig.addOrUpdateOutput(outputConfig);
+        }
+
+        saveApplicationConfig();
+    }
+
+    /**
+     * Save the node chain of an output to configuration format.
+     */
+    private NodeChainConfig saveNodeChainForOutput(OSCOutputService output) {
+        NodeChainConfig chainConfig = new NodeChainConfig();
+        List<OSCNode> nodes = output.getNodeChain().getNodes();
+
+        for (OSCNode node : nodes) {
+            NodeChainConfig.NodeConfig nodeConfig = new NodeChainConfig.NodeConfig();
+            nodeConfig.setType(node.getClass().getName());
+            nodeConfig.setEnabled(true); // Nodes in the chain are considered enabled
+            nodeConfig.setArgs(java.util.Arrays.asList(node.getArgs()));
+            chainConfig.getNodes().add(nodeConfig);
+        }
+
+        return chainConfig;
+    }
+
     @Override
     public void stop() {
         proxyService.stopProxy();
+        saveOutputsToConfig(); // Save outputs and their node chains
         saveApplicationConfig(); // Save config on exit
     }
 }

@@ -16,7 +16,7 @@ import javafx.scene.shape.Sphere;
 import javafx.scene.transform.Rotate;
 import javafx.scene.transform.Translate;
 import javafx.stage.Stage;
-import xyz.theforks.rewrite.InterlaceMagHandler;
+import xyz.theforks.nodes.InterlaceMagNode;
 import xyz.theforks.ui.Theme;
 
 public class CalibrationViewer {
@@ -37,7 +37,7 @@ public class CalibrationViewer {
     private static final double ROTATION_SPEED = 2.0;
     private static final double TRACK_SPEED = 0.3;
 
-    public void show(InterlaceMagHandler handler, String title) {
+    public void show(InterlaceMagNode node, String title) {
         Stage stage = new Stage();
         stage.setTitle(title);
 
@@ -68,7 +68,7 @@ public class CalibrationViewer {
         addCoordinateAxes();
 
         // Calculate scale factor and center point
-        List<double[]> calibrationData = handler.getCalibrationData();
+        List<double[]> calibrationData = node.getCalibrationData();
         double[] min = {Double.MAX_VALUE, Double.MAX_VALUE, Double.MAX_VALUE};
         double[] max = {Double.MIN_VALUE, Double.MIN_VALUE, Double.MIN_VALUE};
         
@@ -103,9 +103,9 @@ public class CalibrationViewer {
 
         // Add curve points
         for (double t = 0; t <= 1.0; t += 0.01) {
-            double x = handler.getSplineX().value(t);
-            double y = handler.getSplineY().value(t);
-            double z = handler.getSplineZ().value(t);
+            double x = node.getSplineX().value(t);
+            double y = node.getSplineY().value(t);
+            double z = node.getSplineZ().value(t);
             
             Sphere sphere = new Sphere(1);
             sphere.setTranslateX((x - center[0]) * scale);
@@ -117,7 +117,7 @@ public class CalibrationViewer {
         }
 
         // Add spline curve
-        addSplineCurve(handler, center, scale);
+        addSplineCurve(node, center, scale);
 
         // Initial camera rotation for better view
         cameraXform.rx.setAngle(20);
@@ -170,16 +170,16 @@ public class CalibrationViewer {
     }
 
     // Add this method to CalibrationViewer class
-    private void addSplineCurve(InterlaceMagHandler handler, double[] center, double scale) {
+    private void addSplineCurve(InterlaceMagNode node, double[] center, double scale) {
         // Create a group for the curve segments
         Group curveGroup = new Group();
         
         // Sample points along the curve
         List<Point3D> points = new ArrayList<>();
         for (double t = 0; t <= 1.0; t += 0.005) { // Smaller step for smoother curve
-            double x = (handler.getSplineX().value(t) - center[0]) * scale;
-            double y = (handler.getSplineY().value(t) - center[1]) * scale;
-            double z = (handler.getSplineZ().value(t) - center[2]) * scale;
+            double x = (node.getSplineX().value(t) - center[0]) * scale;
+            double y = (node.getSplineY().value(t) - center[1]) * scale;
+            double z = (node.getSplineZ().value(t) - center[2]) * scale;
             points.add(new Point3D(x, y, z));
         }
 

@@ -1,4 +1,4 @@
-package xyz.theforks.rewrite;
+package xyz.theforks.nodes;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
@@ -14,7 +14,7 @@ import com.illposed.osc.OSCMessage;
 
 import xyz.theforks.CalibrationViewer;
 
-public class InterlaceMagHandler implements RewriteHandler {
+public class InterlaceMagNode implements OSCNode {
     private List<double[]> calibrationData;
     private PolynomialSplineFunction splineX;
     private PolynomialSplineFunction splineY;
@@ -25,8 +25,8 @@ public class InterlaceMagHandler implements RewriteHandler {
     private double minY = Double.MAX_VALUE;
     private double maxY = Double.MIN_VALUE;
     private int magNum;
-    
-    public InterlaceMagHandler() {
+
+    public InterlaceMagNode() {
         calibrationData = new ArrayList<>();
     }
 
@@ -42,7 +42,7 @@ public class InterlaceMagHandler implements RewriteHandler {
         return "Interlace Magnometer";
     }
 
-    // Single line description of this handler, appropriate for a status bar display
+    // Single line description of this node, appropriate for a status bar display
     public String getHelp() {
         return "Interlace Magnometer " + magNum + " calibration points: " + calibrationData.size();
     }
@@ -119,7 +119,7 @@ public class InterlaceMagHandler implements RewriteHandler {
         double[] x = new double[n];
         double[] y = new double[n];
         double[] z = new double[n];
-        
+
         // Generate parameter values
         for (int i = 0; i < n; i++) {
             t[i] = i / (double)(n-1);
@@ -127,12 +127,12 @@ public class InterlaceMagHandler implements RewriteHandler {
             y[i] = calibrationData.get(i)[1];
             z[i] = calibrationData.get(i)[2];
         }
-        
+
         SplineInterpolator interpolator = new SplineInterpolator();
         splineX = interpolator.interpolate(t, x);
         splineY = interpolator.interpolate(t, y);
         splineZ = interpolator.interpolate(t, z);
-        
+
         // Calculate approximate curve length
         curveLength = 0;
         double[] prevPoint = new double[]{splineX.value(0), splineY.value(0), splineZ.value(0)};
@@ -142,12 +142,12 @@ public class InterlaceMagHandler implements RewriteHandler {
             prevPoint = point;
         }
     }
-    
+
     private double[] findClosestPoint(double x, double y, double z) {
         double minDist = Double.MAX_VALUE;
         double bestT = 0;
         double[] inputPoint = new double[]{x, y, z};
-        
+
         // Binary search for closest point
         for (double t = 0; t <= 1.0; t += 0.01) {
             double[] curvePoint = new double[]{
@@ -161,7 +161,7 @@ public class InterlaceMagHandler implements RewriteHandler {
                 bestT = t;
             }
         }
-        
+
         // Refine search around best t
         double delta = 0.01;
         for (double t = Math.max(0, bestT-delta); t <= Math.min(1, bestT+delta); t += 0.001) {
@@ -176,7 +176,7 @@ public class InterlaceMagHandler implements RewriteHandler {
                 bestT = t;
             }
         }
-        
+
         return new double[]{
             splineX.value(bestT),
             splineY.value(bestT),
@@ -184,7 +184,7 @@ public class InterlaceMagHandler implements RewriteHandler {
             bestT
         };
     }
-    
+
     private double distance(double[] p1, double[] p2) {
         double dx = p1[0] - p2[0];
         double dy = p1[1] - p2[1];
@@ -209,10 +209,10 @@ public class InterlaceMagHandler implements RewriteHandler {
             double x = ((Number)arguments[0]).doubleValue();
             double y = ((Number)arguments[1]).doubleValue();
             double z = ((Number)arguments[2]).doubleValue();
-            
+
             double[] closest = findClosestPoint(x, y, z);
             float t = (float)closest[3];  // Normalized position along curve
-            
+
             arguments[0] = t;
             // System.out.println("Interlacing Mag" + magNum + " at t=" + t);
             String newAddress = message.getAddress();

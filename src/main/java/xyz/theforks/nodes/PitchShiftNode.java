@@ -1,13 +1,13 @@
-package xyz.theforks.rewrite;
+package xyz.theforks.nodes;
 
 import java.util.Arrays;
 
 import com.illposed.osc.OSCMessage;
 
-public class PitchShiftHandler implements RewriteHandler {
+public class PitchShiftNode implements OSCNode {
 
     private String addressPattern;
-    
+
     @Override
     public String getAddressPattern() {
         // /note/.* matches all note messages
@@ -48,7 +48,7 @@ public class PitchShiftHandler implements RewriteHandler {
     public boolean configure(String[] args) {
         // Requires one argument that is the address pattern to match.
         if (args.length != 1) {
-            throw new IllegalArgumentException("PitchShiftHandler requires one argument");
+            throw new IllegalArgumentException("PitchShiftNode requires one argument");
         }
         addressPattern = args[0];
         return true;
@@ -64,4 +64,3 @@ public class PitchShiftHandler implements RewriteHandler {
         return new String[] { addressPattern };
     }
 }
-

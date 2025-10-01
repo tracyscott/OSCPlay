@@ -1,4 +1,4 @@
-package xyz.theforks.rewrite;
+package xyz.theforks.nodes;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -10,19 +10,19 @@ import org.junit.jupiter.api.Test;
 
 import com.illposed.osc.OSCMessage;
 
-class PathTrimHandlerTest {
-    private PathTrimHandler handler;
+class PathTrimNodeTest {
+    private PathTrimNode node;
 
     @BeforeEach
     void setUp() {
-        handler = new PathTrimHandler();
-        handler.configure(new String[]{"/synth/.*"});
+        node = new PathTrimNode();
+        node.configure(new String[]{"/synth/.*"});
     }
 
     @Test
     void testTrimLastPathComponent() {
         OSCMessage input = new OSCMessage("/synth/osc1/freq", Collections.singletonList(440.0f));
-        OSCMessage result = handler.process(input);
+        OSCMessage result = node.process(input);
         
         assertNotNull(result);
         assertEquals("/synth/osc1", result.getAddress());
@@ -34,7 +34,7 @@ class PathTrimHandlerTest {
     @Test
     void testTrimWithNoExistingArguments() {
         OSCMessage input = new OSCMessage("/synth/osc1/volume", Collections.emptyList());
-        OSCMessage result = handler.process(input);
+        OSCMessage result = node.process(input);
         
         assertNotNull(result);
         assertEquals("/synth/osc1", result.getAddress());
@@ -45,7 +45,7 @@ class PathTrimHandlerTest {
     @Test
     void testTrimWithMultipleExistingArguments() {
         OSCMessage input = new OSCMessage("/synth/osc1/note", Arrays.asList(60, 127));
-        OSCMessage result = handler.process(input);
+        OSCMessage result = node.process(input);
         
         assertNotNull(result);
         assertEquals("/synth/osc1", result.getAddress());
@@ -58,7 +58,7 @@ class PathTrimHandlerTest {
     @Test
     void testPassThroughNonMatchingAddress() {
         OSCMessage input = new OSCMessage("/other/osc1/freq", Collections.singletonList(440.0f));
-        OSCMessage result = handler.process(input);
+        OSCMessage result = node.process(input);
         
         assertNotNull(result);
         assertEquals(input, result);
@@ -66,9 +66,9 @@ class PathTrimHandlerTest {
 
     @Test
     void testPassThroughRootPath() {
-        handler.configure(new String[]{"/"});
+        node.configure(new String[]{"/"});
         OSCMessage input = new OSCMessage("/", Collections.singletonList(1));
-        OSCMessage result = handler.process(input);
+        OSCMessage result = node.process(input);
         
         assertNotNull(result);
         assertEquals(input, result);
@@ -76,9 +76,9 @@ class PathTrimHandlerTest {
 
     @Test
     void testPassThroughSingleLevelPath() {
-        handler.configure(new String[]{"/test"});
+        node.configure(new String[]{"/test"});
         OSCMessage input = new OSCMessage("/test", Collections.singletonList(1));
-        OSCMessage result = handler.process(input);
+        OSCMessage result = node.process(input);
         
         assertNotNull(result);
         assertEquals(input, result);
@@ -86,9 +86,9 @@ class PathTrimHandlerTest {
 
     @Test
     void testTrimDeepNestedPath() {
-        handler.configure(new String[]{"/synth/.*"});
+        node.configure(new String[]{"/synth/.*"});
         OSCMessage input = new OSCMessage("/synth/osc1/filter/cutoff/value", Collections.singletonList(1000.0f));
-        OSCMessage result = handler.process(input);
+        OSCMessage result = node.process(input);
         
         assertNotNull(result);
         assertEquals("/synth/osc1/filter/cutoff", result.getAddress());

@@ -1,4 +1,4 @@
-package xyz.theforks.rewrite;
+package xyz.theforks.nodes;
 
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -8,7 +8,7 @@ import java.util.Queue;
 
 import com.illposed.osc.OSCMessage;
 
-public class MovingAvgHandler implements RewriteHandler {
+public class MovingAvgNode implements OSCNode {
     private String addressPattern;
     private int windowSize;
     private Map<String, Queue<Float>> windows = new HashMap<>();
@@ -36,7 +36,7 @@ public class MovingAvgHandler implements RewriteHandler {
     @Override
     public boolean configure(String[] args) {
         if (args.length != 2) {
-            throw new IllegalArgumentException("MovingAvgHandler requires two arguments");
+            throw new IllegalArgumentException("MovingAvgNode requires two arguments");
         }
         addressPattern = args[0];
         try {
@@ -62,7 +62,7 @@ public class MovingAvgHandler implements RewriteHandler {
 
         Queue<Float> window = windows.computeIfAbsent(addr, k -> new LinkedList<>());
         window.offer(value);
-        
+
         if (window.size() > windowSize) {
             window.poll();
         }
@@ -91,5 +91,3 @@ public class MovingAvgHandler implements RewriteHandler {
         return new String[] { "Address Pattern", "Window Size" };
     }
 }
-
-

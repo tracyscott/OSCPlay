@@ -1,8 +1,8 @@
-package xyz.theforks.rewrite;
+package xyz.theforks.nodes;
 
 import com.illposed.osc.OSCMessage;
 
-public interface RewriteHandler {
+public interface OSCNode {
     String getAddressPattern();
     OSCMessage process(OSCMessage message);
     String getHelp();

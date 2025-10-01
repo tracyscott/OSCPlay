@@ -22,8 +22,8 @@ import xyz.theforks.model.OSCMessageRecord;
 import xyz.theforks.model.PlaybackMode;
 import xyz.theforks.model.RecordingSession;
 import xyz.theforks.model.SessionSettings;
-import xyz.theforks.rewrite.RewriteEngine;
-import xyz.theforks.rewrite.RewriteHandler;
+import xyz.theforks.nodes.NodeChain;
+import xyz.theforks.nodes.OSCNode;
 import xyz.theforks.service.OSCOutputService;
 import xyz.theforks.util.DataDirectory;
 
@@ -44,11 +44,11 @@ public class Playback {
     private boolean mediaReady = false;
     private OSCOutputService outputService;
     private PlaybackMode playbackMode = PlaybackMode.WITHOUT_REWRITE;
-    private final RewriteEngine rewriteEngine;
+    private final NodeChain nodeChain;
 
     public Playback() {
         DataDirectory.createDirectories();
-        rewriteEngine = new RewriteEngine(RewriteEngine.Context.PLAYBACK);
+        nodeChain = new NodeChain(NodeChain.Context.PLAYBACK);
     }
 
     public void associateAudioFile(String sessionName, File audioFile) {
@@ -195,12 +195,12 @@ public class Playback {
                                 Thread.sleep(Math.max(0, delay - (System.currentTimeMillis() - startTime)));
 
                                 OSCMessage oscMsg = new OSCMessage(msg.getAddress(), List.of(msg.getArguments()));
-                                
-                                // Apply rewrite handlers based on playback mode
+
+                                // Apply node chain based on playback mode
                                 if (playbackMode == PlaybackMode.WITH_REWRITE) {
-                                    oscMsg = rewriteEngine.processMessage(oscMsg);
+                                    oscMsg = nodeChain.processMessage(oscMsg);
                                     if (oscMsg == null) {
-                                        // Message was cancelled by rewrite handler
+                                        // Message was cancelled by node
                                         continue;
                                     }
                                 }
@@ -264,42 +264,42 @@ public class Playback {
     }
     
     /**
-     * Get the rewrite engine used for playback.
-     * @return The rewrite engine
+     * Get the node chain used for playback.
+     * @return The node chain
      */
-    public RewriteEngine getRewriteEngine() {
-        return rewriteEngine;
+    public NodeChain getNodeChain() {
+        return nodeChain;
     }
-    
+
     /**
-     * Register a rewrite handler for playback.
-     * @param handler The handler to register
+     * Register a node for playback.
+     * @param node The node to register
      */
-    public void registerRewriteHandler(RewriteHandler handler) {
-        rewriteEngine.registerHandler(handler);
+    public void registerNode(OSCNode node) {
+        nodeChain.registerNode(node);
     }
-    
+
     /**
-     * Unregister a rewrite handler from playback.
-     * @param handler The handler to unregister
+     * Unregister a node from playback.
+     * @param node The node to unregister
      */
-    public void unregisterRewriteHandler(RewriteHandler handler) {
-        rewriteEngine.unregisterHandler(handler);
+    public void unregisterNode(OSCNode node) {
+        nodeChain.unregisterNode(node);
     }
-    
+
     /**
-     * Clear all rewrite handlers from playback.
+     * Clear all nodes from playback.
      */
-    public void clearRewriteHandlers() {
-        rewriteEngine.clearHandlers();
+    public void clearNodes() {
+        nodeChain.clearNodes();
     }
-    
+
     /**
-     * Set the list of rewrite handlers, replacing any existing handlers.
-     * @param handlers The new list of handlers
+     * Set the list of nodes, replacing any existing nodes.
+     * @param nodes The new list of nodes
      */
-    public void setRewriteHandlers(List<RewriteHandler> handlers) {
-        rewriteEngine.setHandlers(handlers);
+    public void setNodes(List<OSCNode> nodes) {
+        nodeChain.setNodes(nodes);
     }
     
     @Override

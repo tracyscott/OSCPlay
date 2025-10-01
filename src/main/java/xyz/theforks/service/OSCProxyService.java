@@ -3,7 +3,10 @@ package xyz.theforks.service;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.illposed.osc.OSCMessage;
@@ -14,21 +17,18 @@ import javafx.beans.property.IntegerProperty;
 import javafx.beans.property.SimpleIntegerProperty;
 import xyz.theforks.model.OSCMessageRecord;
 import xyz.theforks.model.RecordingSession;
-import xyz.theforks.model.RecordingMode;
-import xyz.theforks.rewrite.RewriteEngine;
-import xyz.theforks.rewrite.RewriteHandler;
+import xyz.theforks.nodes.NodeChain;
+import xyz.theforks.nodes.OSCNode;
 import xyz.theforks.util.DataDirectory;
 
 public class OSCProxyService {
 
     private OSCInputService inputService;
-    private OSCOutputService outputService;
+    private final Map<String, OSCOutputService> outputs;
     private RecordingSession currentSession;
     private boolean isRecording = false;
-    private RecordingMode recordingMode = RecordingMode.PRE_REWRITE;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final IntegerProperty messageCount = new SimpleIntegerProperty(0);
-    private final RewriteEngine rewriteEngine;
 
     public OSCProxyService() {
         inputService = new OSCInputService();
@@ -38,8 +38,11 @@ public class OSCProxyService {
                 OSCProxyService.this.handleMessage(message);
             }
         });
-        outputService = new OSCOutputService();
-        rewriteEngine = new RewriteEngine(RewriteEngine.Context.PROXY);
+
+        outputs = new HashMap<>();
+        // Create default output for backward compatibility
+        OSCOutputService defaultOutput = new OSCOutputService("default");
+        outputs.put(defaultOutput.getId(), defaultOutput);
 
         DataDirectory.createDirectories();
     }
@@ -48,10 +51,60 @@ public class OSCProxyService {
         return inputService;
     }
 
+    /**
+     * Get the default output service (for backward compatibility).
+     * @return The default output service
+     */
     public OSCOutputService getOutputService() {
-        return outputService;
+        return outputs.get("default");
     }
 
+    /**
+     * Get an output service by ID.
+     * @param id The output ID
+     * @return The output service, or null if not found
+     */
+    public OSCOutputService getOutput(String id) {
+        return outputs.get(id);
+    }
+
+    /**
+     * Get all output services.
+     * @return List of all output services
+     */
+    public List<OSCOutputService> getOutputs() {
+        return new ArrayList<>(outputs.values());
+    }
+
+    /**
+     * Add a new output service.
+     * @param output The output service to add
+     * @return true if added, false if ID already exists
+     */
+    public boolean addOutput(OSCOutputService output) {
+        if (outputs.containsKey(output.getId())) {
+            return false;
+        }
+        outputs.put(output.getId(), output);
+        return true;
+    }
+
+    /**
+     * Remove an output service.
+     * @param id The output ID to remove
+     * @return true if removed, false if not found or is default output
+     */
+    public boolean removeOutput(String id) {
+        if ("default".equals(id)) {
+            return false; // Don't allow removing default output
+        }
+        OSCOutputService output = outputs.remove(id);
+        if (output != null) {
+            output.stop();
+            return true;
+        }
+        return false;
+    }
 
     public IntegerProperty messageCountProperty() {
         return messageCount;
@@ -65,56 +118,64 @@ public class OSCProxyService {
         inputService.setInHost(host);
     }
 
+    /**
+     * Set output host for default output (backward compatibility).
+     */
     public void setOutHost(String host) {
-        outputService.setOutHost(host);
+        OSCOutputService defaultOutput = getOutputService();
+        if (defaultOutput != null) {
+            defaultOutput.setOutHost(host);
+        }
     }
 
+    /**
+     * Set output port for default output (backward compatibility).
+     */
     public void setOutPort(int port) {
-        outputService.setOutPort(port);
+        OSCOutputService defaultOutput = getOutputService();
+        if (defaultOutput != null) {
+            defaultOutput.setOutPort(port);
+        }
     }
 
     public void startProxy() throws IOException {
         stopProxy();
         inputService.start();
-        outputService.start();
-        System.out.println("Proxy started");
+
+        // Start all enabled outputs
+        for (OSCOutputService output : outputs.values()) {
+            if (output.isEnabled()) {
+                output.start();
+            }
+        }
+        System.out.println("Proxy started with " + outputs.size() + " output(s)");
     }
 
     public void stopProxy() {
         inputService.stop();
-        outputService.stop();
+
+        // Stop all outputs
+        for (OSCOutputService output : outputs.values()) {
+            output.stop();
+        }
         System.out.println("Proxy stopped");
     }
 
     private void handleMessage(OSCMessage oscMessage) {
         try {
-            OSCMessage messageToRecord = null;
-            OSCMessage messageToSend = oscMessage;
-            
-            // Handle recording based on mode
-            if (recordingMode == RecordingMode.PRE_REWRITE) {
-                messageToRecord = oscMessage; // Record original message
+            // Always record raw input messages (before any processing)
+            if (isRecording && currentSession != null && oscMessage != null) {
+                recordMessage(oscMessage);
             }
-            
-            // Apply rewrite handlers
-            messageToSend = rewriteEngine.processMessage(oscMessage);
-            if (messageToSend == null) {
-                // Message was cancelled by a rewrite handler
-                return;
+
+            // Send to all enabled outputs
+            // Each output applies its own node chain
+            for (OSCOutputService output : outputs.values()) {
+                if (output.isEnabled() && output.isStarted()) {
+                    output.send(oscMessage);
+                }
             }
-            
-            // Handle recording based on mode
-            if (recordingMode == RecordingMode.POST_REWRITE) {
-                messageToRecord = messageToSend; // Record processed message
-            }
-            
-            // Record the message if recording is active
-            if (isRecording && currentSession != null && messageToRecord != null) {
-                recordMessage(messageToRecord);
-            }
-            
-            // Send the processed message
-            outputService.send(messageToSend);
+
         } catch (IOException | OSCSerializeException e) {
             System.err.println("Error handling message: " + e.getMessage());
             e.printStackTrace();
@@ -186,57 +247,111 @@ public class OSCProxyService {
     }
     
     /**
-     * Get the current recording mode.
-     * @return The recording mode
+     * Get the node chain for the default output (backward compatibility).
+     * @return The default output's node chain
      */
-    public RecordingMode getRecordingMode() {
-        return recordingMode;
+    public NodeChain getNodeChain() {
+        OSCOutputService defaultOutput = getOutputService();
+        return defaultOutput != null ? defaultOutput.getNodeChain() : null;
     }
-    
+
     /**
-     * Set the recording mode.
-     * @param mode The recording mode
+     * Get the node chain for a specific output.
+     * @param outputId The output ID
+     * @return The output's node chain, or null if output not found
      */
-    public void setRecordingMode(RecordingMode mode) {
-        this.recordingMode = mode;
+    public NodeChain getNodeChain(String outputId) {
+        OSCOutputService output = outputs.get(outputId);
+        return output != null ? output.getNodeChain() : null;
     }
-    
+
     /**
-     * Get the rewrite engine used by this proxy service.
-     * @return The rewrite engine
+     * Register a node with the default output (backward compatibility).
+     * @param node The node to register
      */
-    public RewriteEngine getRewriteEngine() {
-        return rewriteEngine;
+    public void registerNode(OSCNode node) {
+        OSCOutputService defaultOutput = getOutputService();
+        if (defaultOutput != null) {
+            defaultOutput.getNodeChain().registerNode(node);
+        }
     }
-    
+
     /**
-     * Register a rewrite handler with this proxy service.
-     * @param handler The handler to register
+     * Register a node with a specific output.
+     * @param outputId The output ID
+     * @param node The node to register
      */
-    public void registerRewriteHandler(RewriteHandler handler) {
-        rewriteEngine.registerHandler(handler);
+    public void registerNode(String outputId, OSCNode node) {
+        OSCOutputService output = outputs.get(outputId);
+        if (output != null) {
+            output.getNodeChain().registerNode(node);
+        }
     }
-    
+
     /**
-     * Unregister a rewrite handler from this proxy service.
-     * @param handler The handler to unregister
+     * Unregister a node from the default output (backward compatibility).
+     * @param node The node to unregister
      */
-    public void unregisterRewriteHandler(RewriteHandler handler) {
-        rewriteEngine.unregisterHandler(handler);
+    public void unregisterNode(OSCNode node) {
+        OSCOutputService defaultOutput = getOutputService();
+        if (defaultOutput != null) {
+            defaultOutput.getNodeChain().unregisterNode(node);
+        }
     }
-    
+
     /**
-     * Clear all rewrite handlers from this proxy service.
+     * Unregister a node from a specific output.
+     * @param outputId The output ID
+     * @param node The node to unregister
      */
-    public void clearRewriteHandlers() {
-        rewriteEngine.clearHandlers();
+    public void unregisterNode(String outputId, OSCNode node) {
+        OSCOutputService output = outputs.get(outputId);
+        if (output != null) {
+            output.getNodeChain().unregisterNode(node);
+        }
     }
-    
+
     /**
-     * Set the list of rewrite handlers, replacing any existing handlers.
-     * @param handlers The new list of handlers
+     * Clear all nodes from the default output (backward compatibility).
      */
-    public void setRewriteHandlers(List<RewriteHandler> handlers) {
-        rewriteEngine.setHandlers(handlers);
+    public void clearNodes() {
+        OSCOutputService defaultOutput = getOutputService();
+        if (defaultOutput != null) {
+            defaultOutput.getNodeChain().clearNodes();
+        }
+    }
+
+    /**
+     * Clear all nodes from a specific output.
+     * @param outputId The output ID
+     */
+    public void clearNodes(String outputId) {
+        OSCOutputService output = outputs.get(outputId);
+        if (output != null) {
+            output.getNodeChain().clearNodes();
+        }
+    }
+
+    /**
+     * Set the list of nodes for the default output (backward compatibility).
+     * @param nodes The new list of nodes
+     */
+    public void setNodes(List<OSCNode> nodes) {
+        OSCOutputService defaultOutput = getOutputService();
+        if (defaultOutput != null) {
+            defaultOutput.getNodeChain().setNodes(nodes);
+        }
+    }
+
+    /**
+     * Set the list of nodes for a specific output.
+     * @param outputId The output ID
+     * @param nodes The new list of nodes
+     */
+    public void setNodes(String outputId, List<OSCNode> nodes) {
+        OSCOutputService output = outputs.get(outputId);
+        if (output != null) {
+            output.getNodeChain().setNodes(nodes);
+        }
     }
 }

@@ -1,4 +1,4 @@
-package xyz.theforks.rewrite;
+package xyz.theforks.nodes;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -13,7 +13,7 @@ import javafx.scene.control.TextField;
 import javafx.scene.layout.GridPane;
 import javafx.stage.Stage;
 
-public class PathTrimHandler implements RewriteHandler {
+public class IntToBangNode implements OSCNode {
     private String addressPattern;
 
     @Override
@@ -23,12 +23,12 @@ public class PathTrimHandler implements RewriteHandler {
 
     @Override
     public String label() {
-        return "PathTrim";
+        return "IntToBang";
     }
 
     @Override
     public String getHelp() {
-        return "Removes the last component from the OSC path and adds it as a String argument";
+        return "Converts OSC messages with integer argument 1 to argumentless messages, drops others";
     }
 
     @Override
@@ -49,7 +49,7 @@ public class PathTrimHandler implements RewriteHandler {
     @Override
     public boolean configure(String[] args) {
         if (args.length != 1) {
-            throw new IllegalArgumentException("PathTrimHandler requires one argument");
+            throw new IllegalArgumentException("IntToBangNode requires one argument");
         }
         addressPattern = args[0];
         return true;
@@ -59,30 +59,30 @@ public class PathTrimHandler implements RewriteHandler {
     public OSCMessage process(OSCMessage message) {
         String addr = message.getAddress();
         if (addr.matches(addressPattern)) {
-            // Find the last slash in the address
-            int lastSlashIndex = addr.lastIndexOf('/');
-            
-            if (lastSlashIndex > 0) { // Don't trim if it's the root slash
-                String trimmedPath = addr.substring(0, lastSlashIndex);
-                String lastComponent = addr.substring(lastSlashIndex + 1);
-                
-                // Create new argument list with the last component added as first argument
-                List<Object> newArguments = new ArrayList<>();
-                newArguments.add(lastComponent);
-                newArguments.addAll(message.getArguments());
-                
-                return new OSCMessage(trimmedPath, newArguments);
+            List<Object> arguments = message.getArguments();
+
+            // Check if message has exactly one argument and it's an integer
+            if (arguments.size() == 1 && arguments.get(0) instanceof Integer) {
+                Integer intValue = (Integer) arguments.get(0);
+
+                // If integer is 1, forward message with no arguments
+                if (intValue == 1) {
+                    return new OSCMessage(addr, new ArrayList<>());
+                } else {
+                    // Drop the message by returning null
+                    return null;
+                }
             }
         }
-        
-        // Return original message if it doesn't match our criteria or has no trimmable path
+
+        // Return original message if it doesn't match our criteria
         return message;
     }
 
     @Override
     public void showPreferences() {
         Stage stage = new Stage();
-        stage.setTitle("PathTrim Handler Preferences");
+        stage.setTitle("IntToBang Node Preferences");
 
         GridPane grid = new GridPane();
         grid.setPadding(new Insets(10));
@@ -96,10 +96,9 @@ public class PathTrimHandler implements RewriteHandler {
         grid.add(patternField, 1, 0);
 
         // Help text
-        Label helpLabel = new Label("Removes the last component from OSC paths and adds it as a String argument.\n" +
-                                   "Example: '/synth/osc1/freq' with args [440.0] becomes\n" +
-                                   "         '/synth/osc1' with args ['freq', 440.0]\n" +
-                                   "Use patterns like '/synth/.*/.*' to match nested paths.");
+        Label helpLabel = new Label("Converts messages with integer argument 1 to argumentless messages.\n" +
+                                   "Messages with other integer values are dropped.\n" +
+                                   "Use patterns like '/trigger/.*' to match multiple addresses.");
         helpLabel.setWrapText(true);
         grid.add(helpLabel, 0, 1, 2, 1);
 

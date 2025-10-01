@@ -1,4 +1,4 @@
-package xyz.theforks.rewrite;
+package xyz.theforks.nodes;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -10,19 +10,19 @@ import org.junit.jupiter.api.Test;
 
 import com.illposed.osc.OSCMessage;
 
-class IntToBangHandlerTest {
-    private IntToBangHandler handler;
+class IntToBangNodeTest {
+    private IntToBangNode node;
 
     @BeforeEach
     void setUp() {
-        handler = new IntToBangHandler();
-        handler.configure(new String[]{"/trigger/.*"});
+        node = new IntToBangNode();
+        node.configure(new String[]{"/trigger/.*"});
     }
 
     @Test
     void testConvertIntegerOneToArgumentless() {
         OSCMessage input = new OSCMessage("/trigger/button", Collections.singletonList(1));
-        OSCMessage result = handler.process(input);
+        OSCMessage result = node.process(input);
         
         assertNotNull(result);
         assertEquals("/trigger/button", result.getAddress());
@@ -32,7 +32,7 @@ class IntToBangHandlerTest {
     @Test
     void testDropNonOneIntegers() {
         OSCMessage input = new OSCMessage("/trigger/button", Collections.singletonList(0));
-        OSCMessage result = handler.process(input);
+        OSCMessage result = node.process(input);
         
         assertNull(result);
     }
@@ -40,7 +40,7 @@ class IntToBangHandlerTest {
     @Test
     void testDropNegativeIntegers() {
         OSCMessage input = new OSCMessage("/trigger/button", Collections.singletonList(-1));
-        OSCMessage result = handler.process(input);
+        OSCMessage result = node.process(input);
         
         assertNull(result);
     }
@@ -48,7 +48,7 @@ class IntToBangHandlerTest {
     @Test
     void testPassThroughNonMatchingAddress() {
         OSCMessage input = new OSCMessage("/other/button", Collections.singletonList(1));
-        OSCMessage result = handler.process(input);
+        OSCMessage result = node.process(input);
         
         assertNotNull(result);
         assertEquals(input, result);
@@ -57,7 +57,7 @@ class IntToBangHandlerTest {
     @Test
     void testPassThroughNonIntegerArguments() {
         OSCMessage input = new OSCMessage("/trigger/button", Collections.singletonList(1.0f));
-        OSCMessage result = handler.process(input);
+        OSCMessage result = node.process(input);
         
         assertNotNull(result);
         assertEquals(input, result);
@@ -66,7 +66,7 @@ class IntToBangHandlerTest {
     @Test
     void testPassThroughMultipleArguments() {
         OSCMessage input = new OSCMessage("/trigger/button", Arrays.asList(1, 2));
-        OSCMessage result = handler.process(input);
+        OSCMessage result = node.process(input);
         
         assertNotNull(result);
         assertEquals(input, result);
@@ -75,7 +75,7 @@ class IntToBangHandlerTest {
     @Test
     void testPassThroughNoArguments() {
         OSCMessage input = new OSCMessage("/trigger/button", Collections.emptyList());
-        OSCMessage result = handler.process(input);
+        OSCMessage result = node.process(input);
         
         assertNotNull(result);
         assertEquals(input, result);
