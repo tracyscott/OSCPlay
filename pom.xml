@@ -271,6 +271,45 @@
                     </execution>
                 </executions>
             </plugin>
+
+            <!-- JPackage Plugin for native installers -->
+            <plugin>
+                <groupId>org.panteleyev</groupId>
+                <artifactId>jpackage-maven-plugin</artifactId>
+                <version>1.6.5</version>
+                <configuration>
+                    <name>OSCPlay</name>
+                    <appVersion>${project.version}</appVersion>
+                    <vendor>TheForks</vendor>
+                    <destination>target/dist</destination>
+                    <javaOptions>
+                        <option>--add-exports</option>
+                        <option>javafx.base/com.sun.javafx=ALL-UNNAMED</option>
+                        <option>--add-exports</option>
+                        <option>javafx.graphics/com.sun.javafx.util=ALL-UNNAMED</option>
+                        <option>--add-exports</option>
+                        <option>javafx.graphics/com.sun.javafx.application=ALL-UNNAMED</option>
+                        <option>--add-exports</option>
+                        <option>javafx.media/com.sun.media.jfxmedia=ALL-UNNAMED</option>
+                    </javaOptions>
+                    <input>target</input>
+                    <mainJar>osc-play-${project.version}-shaded.jar</mainJar>
+                    <mainClass>xyz.theforks.Launcher</mainClass>
+
+                    <!-- Windows specific options -->
+                    <winDirChooser>true</winDirChooser>
+                    <winMenu>true</winMenu>
+                    <winShortcut>true</winShortcut>
+
+                    <!-- macOS specific options -->
+                    <macPackageName>OSCPlay</macPackageName>
+                    <icon>${project.basedir}/src/main/resources/icons/app-icon.icns</icon>
+
+                    <!-- Linux specific options -->
+                    <linuxShortcut>true</linuxShortcut>
+                    <linuxAppCategory>AudioVideo</linuxAppCategory>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 </project>
