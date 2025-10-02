@@ -86,7 +86,6 @@ public class OSCProxyApp extends Application {
     private Stage padWindow;
     private Sampler sampler;
 
-    private ToggleButton proxyToggleButton;
     private Label statusBar;
     private Playback playback;
 
@@ -227,7 +226,7 @@ public class OSCProxyApp extends Application {
         inLabel.setMinWidth(20);
         proxyGrid.add(inLabel, 0, 0);
         inHostField = new TextField("127.0.0.1");
-        inHostField.setMinWidth(500);  // Doubled from 250
+        inHostField.setMinWidth(200);  // Doubled from 250
         inHostField.setStyle("-fx-font-size: 11px;");
         proxyGrid.add(inHostField, 1, 0);
         inPortField = new TextField("8000");
@@ -235,42 +234,52 @@ public class OSCProxyApp extends Application {
         inPortField.setStyle("-fx-font-size: 11px;");
         proxyGrid.add(inPortField, 2, 0);
 
-         // Control buttons - Enable Proxy comes before rewrite handlers
-        proxyToggleButton = new ToggleButton("Enable Proxy");
-        proxyToggleButton.setSelected(true);
-        proxyToggleButton.setMinWidth(120);
-        proxyGrid.add(proxyToggleButton, 0, 1, GridPane.REMAINING, 1);
-
-        // Output selection and management (row 2)
+        // Output selection and management (row 1)
         HBox outputSelectionBox = new HBox(10);
         outputComboBox = new ComboBox<>();
         outputComboBox.setPromptText("Select Output");
         outputComboBox.setMinWidth(200);
+        outputComboBox.setStyle("-fx-background-color: #121212; -fx-text-fill: white; -fx-border-color: #333333;");
+
+        // Customize the cell factory to use black background for selected items
+        outputComboBox.setCellFactory(lv -> new javafx.scene.control.ListCell<String>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                    setStyle("");
+                } else {
+                    setText(item);
+                    setStyle("-fx-background-color: #121212; -fx-text-fill: white;");
+                }
+            }
+        });
         manageOutputsButton = new Button("Manage Outputs");
-        enableOutputCheckBox = new CheckBox("Enabled");
-        enableOutputCheckBox.setSelected(true);
         monitorButton = new Button("Monitor");
         outputSelectionBox.getChildren().addAll(
-            new Label("Output:"),
             outputComboBox,
             manageOutputsButton,
-            enableOutputCheckBox,
             monitorButton
         );
-        proxyGrid.add(outputSelectionBox, 0, 2, GridPane.REMAINING, 1);
+        proxyGrid.add(outputSelectionBox, 0, 1, GridPane.REMAINING, 1);
+        GridPane.setValignment(outputSelectionBox, javafx.geometry.VPos.CENTER);
 
-        // Output configuration (row 3)
+        // Output configuration (row 2)
         Label outLabel = new Label("Out");
         outLabel.setMinWidth(20);
-        proxyGrid.add(outLabel, 0, 3);
+        proxyGrid.add(outLabel, 0, 2);
         outHostField = new TextField(outHost);
-        outHostField.setMinWidth(500);  // Doubled from 250
+        outHostField.setMinWidth(200);  // Doubled from 250
         outHostField.setStyle("-fx-font-size: 11px;");
-        proxyGrid.add(outHostField, 1, 3);
+        proxyGrid.add(outHostField, 1, 2);
         outPortField = new TextField("" + outPort);
         outPortField.setMaxWidth(200);  // Doubled from 100
         outPortField.setStyle("-fx-font-size: 11px;");
-        proxyGrid.add(outPortField, 2, 3);
+        proxyGrid.add(outPortField, 2, 2);
+        enableOutputCheckBox = new CheckBox("Enabled");
+        enableOutputCheckBox.setSelected(true);
+        proxyGrid.add(enableOutputCheckBox, 3, 2);
 
         // Create the logArea so we can pass it to NodeChainManager
         logArea = new TextArea();
@@ -278,10 +287,10 @@ public class OSCProxyApp extends Application {
         statusBar = new Label();
 
 
-        // Node chain section (below output config, row 4)
+        // Node chain section (below output config, row 3)
         nodeChainManager = new NodeChainManager(proxyService, logArea, statusBar);
         nodeChainManager.setProjectManager(projectManager);
-        nodeChainManager.createUI(proxyGrid, 5);
+        nodeChainManager.createUI(proxyGrid, 3);
 
         // Connect the playback instance to the node chain manager for synchronization
         nodeChainManager.setPlayback(playback);
@@ -293,10 +302,11 @@ public class OSCProxyApp extends Application {
         ColumnConstraints col0 = new ColumnConstraints(); // Label column
         ColumnConstraints col1 = new ColumnConstraints(); // Host field column (expandable)
         ColumnConstraints col2 = new ColumnConstraints(); // Port field column
-        
+        ColumnConstraints col3 = new ColumnConstraints(); // Checkbox column
+
         col1.setHgrow(Priority.ALWAYS);
-        
-        proxyGrid.getColumnConstraints().addAll(col0, col1, col2);
+
+        proxyGrid.getColumnConstraints().addAll(col0, col1, col2, col3);
 
         TitledPane proxyPane = new TitledPane("Proxy", proxyGrid);
         proxyPane.setCollapsible(true);
@@ -492,19 +502,17 @@ public class OSCProxyApp extends Application {
         outputComboBox.getSelectionModel().select("default");
         updateOutputFields();
 
-        // Start proxy by default since toggle is selected
+        // Start proxy automatically
         try {
             proxyService.setInHost(inHostField.getText());
             proxyService.setInPort(Integer.parseInt(inPortField.getText()));
             proxyService.setOutHost(outHostField.getText());
             proxyService.setOutPort(Integer.parseInt(outPortField.getText()));
             proxyService.startProxy();
-            proxyToggleButton.setText("Disable Proxy");
             log("Proxy started automatically");
         } catch (Exception ex) {
             showError("Error starting proxy", ex.getMessage());
             log("Error: " + ex.getMessage());
-            proxyToggleButton.setSelected(false);
         }
     }
 
@@ -712,31 +720,6 @@ public class OSCProxyApp extends Application {
     }
 
     private void setupEventHandlers() {
-        // Removed individual In/Out enable buttons; proxy toggle controls both
-
-        proxyToggleButton.setOnAction(e -> {
-            boolean enabled = proxyToggleButton.isSelected();
-            if (enabled) {
-                proxyToggleButton.setText("Disable Proxy");
-                try {
-                    proxyService.setInHost(inHostField.getText());
-                    proxyService.setInPort(Integer.parseInt(inPortField.getText()));
-                    proxyService.setOutHost(outHostField.getText());
-                    proxyService.setOutPort(Integer.parseInt(outPortField.getText()));
-                    proxyService.startProxy();
-                    log("Proxy started");
-                } catch (Exception ex) {
-                    showError("Error starting proxy", ex.getMessage());
-                    log("Error: " + ex.getMessage());
-                    proxyToggleButton.setSelected(false);
-                }
-            } else {
-                proxyToggleButton.setText("Enable Proxy");
-                proxyService.stopProxy();
-                log("Proxy stopped");
-            }
-        });
-
         recordButton.setOnAction(e -> {
             if (!isRecording) {
                 TextInputDialog dialog = new TextInputDialog();
@@ -812,13 +795,6 @@ public class OSCProxyApp extends Application {
         });
 
         // Add hover handlers to controls
-        proxyToggleButton.setOnMouseEntered(e -> 
-            statusBar.setText(proxyToggleButton.isSelected() ? "Disable proxy" : "Enable proxy"));
-        proxyToggleButton.setOnMouseExited(e -> 
-            statusBar.setText(""));
-
-        // Removed hover handlers for removed In/Out enable buttons
-
         playButton.setOnMouseEntered(e ->
             statusBar.setText("Play recorded session"));
         playButton.setOnMouseExited(e ->
@@ -973,9 +949,6 @@ public class OSCProxyApp extends Application {
             outHostField.setStyle(baseStyle);
             outPortField.setStyle(baseStyle);
 
-            // Update toggle button to reflect running state
-            proxyToggleButton.setSelected(true);
-            proxyToggleButton.setText("Disable Proxy");
             statusBar.setText("");
 
             // Save updated configuration
@@ -985,15 +958,11 @@ public class OSCProxyApp extends Application {
             log("ERROR: " + errorMsg);
             statusBar.setText(errorMsg);
             changedField.setStyle(errorStyle);
-            proxyToggleButton.setSelected(false);
-            proxyToggleButton.setText("Enable Proxy");
         } catch (Exception ex) {
             String errorMsg = "Failed to start proxy: " + ex.getMessage();
             log("ERROR: " + errorMsg);
             statusBar.setText(errorMsg);
             changedField.setStyle(errorStyle);
-            proxyToggleButton.setSelected(false);
-            proxyToggleButton.setText("Enable Proxy");
         }
     }
 

@@ -139,7 +139,7 @@ public class NodeChainManager {
 
     public void createUI(GridPane grid, int startRow) {
         // Node chain section
-        nodesLabel = new Label("Node Chain Config:");
+        nodesLabel = new Label("Node Chain:");
         grid.add(nodesLabel, 0, startRow, GridPane.REMAINING, 1);  // Modified to span all columns
 
         // Node management buttons on their own row below the list
@@ -164,7 +164,7 @@ public class NodeChainManager {
     private void updateNodesLabel() {
         String filename = currentConfigFile != null ?
             " (" + new File(currentConfigFile).getName() + ")" : "";
-        nodesLabel.setText("Node Chain Config [" + outputId + "]:" + filename);
+        nodesLabel.setText("Node Chain [" + outputId + "]" + filename);
     }
 
     private void setupNodesListView() {
