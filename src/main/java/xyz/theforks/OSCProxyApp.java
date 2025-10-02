@@ -18,14 +18,11 @@ import javafx.scene.control.MenuBar;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.SeparatorMenuItem;
 import javafx.scene.control.ProgressBar;
-import javafx.scene.control.RadioButton;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TextInputDialog;
-import javafx.scene.control.ToggleButton;
-import javafx.scene.control.ToggleGroup;
 import javafx.scene.control.TitledPane;
 import javafx.scene.image.Image;
 import javafx.scene.layout.ColumnConstraints;
@@ -37,7 +34,6 @@ import javafx.stage.FileChooser;
 import javafx.stage.FileChooser.ExtensionFilter;
 import javafx.stage.Stage;
 import xyz.theforks.model.ApplicationConfig;
-import xyz.theforks.model.AppSettings;
 import xyz.theforks.model.NodeChainConfig;
 import xyz.theforks.model.OutputConfig;
 import xyz.theforks.model.PlaybackMode;
@@ -56,7 +52,6 @@ import xyz.theforks.ui.MonitorWindow;
 import xyz.theforks.util.DataDirectory;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.io.File;
 import java.io.InputStream;
 import java.nio.file.Path;
 import java.util.List;
@@ -72,8 +67,6 @@ public class OSCProxyApp extends Application {
     private TextField inPortField;
     private TextField outHostField;
     private TextField outPortField;
-    private Button startButton;
-    private Button stopButton;
     private Button manageButton;
     private Button recordButton;
     private Label messageCountLabel;
@@ -85,9 +78,6 @@ public class OSCProxyApp extends Application {
     private Button selectAudioButton;
     private Label audioFileLabel;
     private TextArea logArea;
-    private Button openPadsButton;
-    private Stage padWindow;
-    private Sampler sampler;
 
     private Label statusBar;
     private Playback playback;
@@ -385,16 +375,6 @@ public class OSCProxyApp extends Application {
 
         grid.add(tabPane, 0, 1, GridPane.REMAINING, 1);
 
-       
-       // Sampler pads
-        //openPadsButton = new Button("Sampler Pads");
-        //HBox openPadsControls = new HBox(10);
-        //openPadsControls.getChildren().add(openPadsButton);
-        //sampler = new Sampler(proxyService.getInputService(), proxyService.getOutputService(), logArea);
-        //openPadsButton.setOnAction(e -> sampler.show());
-        // Disable sampler pad interface for now
-        // grid.add(openPadsControls, 0, 10, 2, 1);
-
         // Log area
         logArea.setEditable(false);
         logArea.setPrefRowCount(6);
@@ -406,7 +386,6 @@ public class OSCProxyApp extends Application {
         grid.add(logArea, 0, 2, GridPane.REMAINING, 1); // Span all columns
 
         // Status bar
-        
         statusBar.setMaxWidth(Double.MAX_VALUE);
         statusBar.setPadding(new Insets(5));
         statusBar.getStyleClass().add("status-bar");
@@ -708,12 +687,6 @@ public class OSCProxyApp extends Application {
         if (nodeChainManager != null && selectedOutputId != null) {
             nodeChainManager.setOutputId(selectedOutputId);
         }
-
-        // Load MIDI mappings
-        ProjectConfig project = projectManager.getCurrentProject();
-        if (project != null && sampler != null) {
-            sampler.loadMidiMappings(project.getMidiMappings());
-        }
     }
 
     /**
@@ -736,11 +709,6 @@ public class OSCProxyApp extends Application {
                         saveNodeChainForOutput(output)
                 );
                 project.addOrUpdateOutput(outputConfig);
-            }
-
-            // Save MIDI mappings
-            if (sampler != null) {
-                project.setMidiMappings(sampler.getMidiMappings());
             }
         }
     }
