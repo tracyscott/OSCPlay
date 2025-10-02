@@ -57,12 +57,15 @@ import xyz.theforks.util.DataDirectory;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.File;
+import java.io.InputStream;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Properties;
 
 public class OSCProxyApp extends Application {
 
     private OSCProxyService proxyService;
+    private static String appVersion = "unknown";
 
     // UI Components
     private TextField inHostField;
@@ -157,6 +160,9 @@ public class OSCProxyApp extends Application {
     @Override
     public void start(Stage primaryStage) {
         this.primaryStage = primaryStage;
+
+        // Load application version
+        loadAppVersion();
 
         // Show splash screen for project selection
         ProjectSplashScreen splashScreen = new ProjectSplashScreen();
@@ -381,11 +387,11 @@ public class OSCProxyApp extends Application {
 
        
        // Sampler pads
-        openPadsButton = new Button("Sampler Pads");
-        HBox openPadsControls = new HBox(10);
-        openPadsControls.getChildren().add(openPadsButton);
-        sampler = new Sampler(proxyService.getInputService(), proxyService.getOutputService(), logArea);
-        openPadsButton.setOnAction(e -> sampler.show());
+        //openPadsButton = new Button("Sampler Pads");
+        //HBox openPadsControls = new HBox(10);
+        //openPadsControls.getChildren().add(openPadsButton);
+        //sampler = new Sampler(proxyService.getInputService(), proxyService.getOutputService(), logArea);
+        //openPadsButton.setOnAction(e -> sampler.show());
         // Disable sampler pad interface for now
         // grid.add(openPadsControls, 0, 10, 2, 1);
 
@@ -471,7 +477,7 @@ public class OSCProxyApp extends Application {
         HBox.setHgrow(audioFileLabel, Priority.ALWAYS);
         
         // Make sampler controls expand
-        GridPane.setHgrow(openPadsControls, Priority.ALWAYS);
+        //GridPane.setHgrow(openPadsControls, Priority.ALWAYS);
 
         // Configure main grid column constraints to make it expand to window width
         ColumnConstraints mainCol = new ColumnConstraints();
@@ -543,6 +549,15 @@ public class OSCProxyApp extends Application {
         fileMenu.getItems().addAll(newProjectItem, openProjectItem, saveProjectItem, saveAsProjectItem,
                 new SeparatorMenuItem(), quitItem);
         menuBar.getMenus().add(fileMenu);
+
+        // Help menu
+        Menu helpMenu = new Menu("Help");
+
+        MenuItem aboutItem = new MenuItem("About");
+        aboutItem.setOnAction(e -> showAboutDialog());
+
+        helpMenu.getItems().add(aboutItem);
+        menuBar.getMenus().add(helpMenu);
 
         return menuBar;
     }
@@ -693,6 +708,12 @@ public class OSCProxyApp extends Application {
         if (nodeChainManager != null && selectedOutputId != null) {
             nodeChainManager.setOutputId(selectedOutputId);
         }
+
+        // Load MIDI mappings
+        ProjectConfig project = projectManager.getCurrentProject();
+        if (project != null && sampler != null) {
+            sampler.loadMidiMappings(project.getMidiMappings());
+        }
     }
 
     /**
@@ -715,6 +736,11 @@ public class OSCProxyApp extends Application {
                         saveNodeChainForOutput(output)
                 );
                 project.addOrUpdateOutput(outputConfig);
+            }
+
+            // Save MIDI mappings
+            if (sampler != null) {
+                project.setMidiMappings(sampler.getMidiMappings());
             }
         }
     }
@@ -1026,11 +1052,37 @@ public class OSCProxyApp extends Application {
         alert.showAndWait();
     }
 
+    /**
+     * Show the About dialog with application information.
+     */
+    private void showAboutDialog() {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("About OSCPlay");
+        alert.setHeaderText("OSCPlay " + appVersion);
+        alert.setContentText("Copyright © Tracy Scott");
+        alert.showAndWait();
+    }
+
     private void log(String message) {
         Platform.runLater(() -> {
             logArea.appendText(message + "\n");
             logArea.setScrollTop(Double.MAX_VALUE); // Scroll to bottom
         });
+    }
+
+    /**
+     * Load application version from properties file.
+     */
+    private void loadAppVersion() {
+        try (InputStream input = getClass().getClassLoader().getResourceAsStream("application.properties")) {
+            if (input != null) {
+                Properties prop = new Properties();
+                prop.load(input);
+                appVersion = prop.getProperty("app.version", "unknown");
+            }
+        } catch (Exception e) {
+            System.err.println("Error loading application version: " + e.getMessage());
+        }
     }
 
     /**
@@ -1040,7 +1092,7 @@ public class OSCProxyApp extends Application {
         String projectName = projectManager != null && projectManager.getCurrentProjectName() != null
                 ? projectManager.getCurrentProjectName()
                 : "Untitled";
-        stage.setTitle("OSC Play - " + projectName);
+        stage.setTitle("OSCPlay " + appVersion + " - " + projectName);
     }
 
     private static void printUsage() {

@@ -1,6 +1,7 @@
 package xyz.theforks.ui;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
@@ -9,6 +10,7 @@ import javafx.scene.paint.Color;
 import javafx.stage.FileChooser;
 import xyz.theforks.Playback;
 import xyz.theforks.model.SamplerPad;
+import xyz.theforks.service.MIDIService;
 import xyz.theforks.service.OSCProxyService;
 import xyz.theforks.service.ProjectManager;
 import xyz.theforks.util.DataDirectory;
@@ -36,6 +38,11 @@ public class SamplerPadUI extends VBox {
     private final Map<Integer, Button> padButtons;
     private final Map<Integer, Integer> activePads; // Maps padIndex to playing state
     private final ObjectMapper mapper;
+    private final MIDIService midiService;
+    private final Map<Integer, String> midiMappings; // Maps padIndex to MIDI key
+    private ComboBox<String> midiDeviceSelector;
+    private ToggleButton midiLearnButton;
+    private int learnPadNumber = -1;
 
     public SamplerPadUI(OSCProxyService proxyService, Playback playback, TextArea logArea, ProjectManager projectManager) {
         this.proxyService = proxyService;
@@ -46,6 +53,8 @@ public class SamplerPadUI extends VBox {
         this.padButtons = new HashMap<>();
         this.activePads = new HashMap<>();
         this.mapper = new ObjectMapper();
+        this.midiService = new MIDIService();
+        this.midiMappings = new HashMap<>();
 
         // Listen to playback state changes
         playback.isPlayingProperty().addListener((obs, wasPlaying, isPlaying) -> {
@@ -60,6 +69,9 @@ public class SamplerPadUI extends VBox {
         setPadding(new Insets(10));
         setSpacing(10);
 
+        // Create MIDI controls
+        HBox midiControls = createMIDIControls();
+
         // Create pad grid
         padGrid = new GridPane();
         padGrid.setHgap(5);
@@ -72,8 +84,94 @@ public class SamplerPadUI extends VBox {
         // Load saved configuration
         loadConfiguration();
 
-        // Add grid to container
-        getChildren().add(padGrid);
+        // Add controls and grid to container
+        getChildren().addAll(midiControls, padGrid);
+    }
+
+    private HBox createMIDIControls() {
+        HBox midiBox = new HBox(10);
+        midiBox.setAlignment(Pos.CENTER_LEFT);
+        midiBox.setPadding(new Insets(5));
+
+        Label midiLabel = new Label("MIDI Device:");
+        midiLabel.setStyle("-fx-text-fill: white;");
+
+        midiDeviceSelector = new ComboBox<>();
+        midiDeviceSelector.setPromptText("Select MIDI Device");
+        midiDeviceSelector.setPrefWidth(250);
+
+        // Populate MIDI devices
+        refreshMIDIDevices();
+
+        // Handle device selection
+        midiDeviceSelector.setOnAction(e -> {
+            String selectedDevice = midiDeviceSelector.getValue();
+            if (selectedDevice != null && !selectedDevice.isEmpty()) {
+                if (midiService.openDevice(selectedDevice)) {
+                    log("Connected to MIDI device: " + selectedDevice);
+                    midiLearnButton.setDisable(false);
+
+                    // Save device selection to project config
+                    try {
+                        xyz.theforks.model.ProjectConfig projectConfig = projectManager.getCurrentProject();
+                        if (projectConfig != null) {
+                            projectConfig.setMidiDeviceName(selectedDevice);
+                            projectManager.saveProject();
+                        }
+                    } catch (Exception ex) {
+                        log("Error saving MIDI device selection: " + ex.getMessage());
+                    }
+                } else {
+                    log("Failed to connect to MIDI device: " + selectedDevice);
+                    midiLearnButton.setDisable(true);
+                }
+            }
+        });
+
+        Button refreshButton = new Button("Refresh");
+        refreshButton.setOnAction(e -> refreshMIDIDevices());
+
+        midiLearnButton = new ToggleButton("MIDI Learn");
+        midiLearnButton.setStyle("""
+            -fx-background-color: #404040;
+            -fx-text-fill: white;
+            -fx-font-size: 11pt;
+            -fx-min-width: 100px;
+            -fx-min-height: 28px;
+            """);
+        midiLearnButton.setDisable(true);
+
+        midiLearnButton.setOnAction(e -> {
+            if (midiLearnButton.isSelected()) {
+                midiLearnButton.setStyle("""
+                    -fx-background-color: #ff6600;
+                    -fx-text-fill: white;
+                    -fx-font-size: 11pt;
+                    -fx-min-width: 100px;
+                    -fx-min-height: 28px;
+                    -fx-effect: dropshadow(gaussian, rgba(255,102,0,0.6), 10, 0, 0, 0);
+                    """);
+                log("MIDI Learn mode: Click a pad, then press a MIDI button");
+            } else {
+                midiLearnButton.setStyle("""
+                    -fx-background-color: #404040;
+                    -fx-text-fill: white;
+                    -fx-font-size: 11pt;
+                    -fx-min-width: 100px;
+                    -fx-min-height: 28px;
+                    """);
+                learnPadNumber = -1;
+                log("MIDI Learn mode cancelled");
+            }
+        });
+
+        midiBox.getChildren().addAll(midiLabel, midiDeviceSelector, refreshButton, midiLearnButton);
+        return midiBox;
+    }
+
+    private void refreshMIDIDevices() {
+        midiDeviceSelector.getItems().clear();
+        midiDeviceSelector.getItems().addAll(midiService.getAvailableDevices());
     }
 
     private void initializePads() {
@@ -108,8 +206,14 @@ public class SamplerPadUI extends VBox {
         button.setPrefSize(150, 150);
         button.setStyle("-fx-background-color: #888888; -fx-text-fill: white; -fx-font-size: 14px;");
 
-        // Left click: play pad
-        button.setOnAction(e -> playPad(padIndex));
+        // Left click: play pad or handle MIDI learn
+        button.setOnAction(e -> {
+            if (midiLearnButton != null && midiLearnButton.isSelected()) {
+                handleMIDILearn(padIndex);
+            } else {
+                playPad(padIndex);
+            }
+        });
 
         // Right click: configure pad
         button.setOnContextMenuRequested(e -> {
@@ -121,11 +225,68 @@ public class SamplerPadUI extends VBox {
             MenuItem clearItem = new MenuItem("Clear Pad");
             clearItem.setOnAction(ev -> clearPad(padIndex));
 
-            contextMenu.getItems().addAll(configureItem, clearItem);
+            MenuItem clearMidiItem = new MenuItem("Clear MIDI Mapping");
+            clearMidiItem.setOnAction(ev -> clearMIDIMapping(padIndex));
+            clearMidiItem.setDisable(!midiMappings.containsKey(padIndex));
+
+            contextMenu.getItems().addAll(configureItem, clearItem, new SeparatorMenuItem(), clearMidiItem);
             contextMenu.show(button, e.getScreenX(), e.getScreenY());
         });
 
         return button;
+    }
+
+    private void handleMIDILearn(int padIndex) {
+        learnPadNumber = padIndex;
+        log("Pad " + padIndex + " selected. Now press a MIDI button...");
+
+        // Enable learn mode in MIDI service
+        midiService.enableLearnMode((messageType, midiNumber) -> {
+            Platform.runLater(() -> {
+                String midiKey = (messageType == 0 ? "note:" : "cc:") + midiNumber;
+                String messageTypeName = (messageType == 0 ? "Note" : "CC");
+
+                // Remove old mapping if exists
+                if (midiMappings.containsKey(padIndex)) {
+                    midiService.unregisterMessageHandler(midiMappings.get(padIndex));
+                }
+
+                // Store new mapping
+                midiMappings.put(padIndex, midiKey);
+
+                // Register handler to trigger pad
+                midiService.registerMessageHandler(midiKey, (num, vel) -> {
+                    Platform.runLater(() -> triggerPad(padIndex));
+                });
+
+                log("Pad " + padIndex + " mapped to MIDI " + messageTypeName + " " + midiNumber);
+                saveConfiguration();
+
+                // Reset learn mode
+                midiLearnButton.setSelected(false);
+                midiLearnButton.setStyle("""
+                    -fx-background-color: #404040;
+                    -fx-text-fill: white;
+                    -fx-font-size: 11pt;
+                    -fx-min-width: 100px;
+                    -fx-min-height: 28px;
+                    """);
+                learnPadNumber = -1;
+            });
+        });
+    }
+
+    private void triggerPad(int padIndex) {
+        playPad(padIndex);
+    }
+
+    private void clearMIDIMapping(int padIndex) {
+        String midiKey = midiMappings.remove(padIndex);
+        if (midiKey != null) {
+            midiService.unregisterMessageHandler(midiKey);
+            log("Cleared MIDI mapping for pad " + padIndex);
+            saveConfiguration();
+        }
     }
 
     private void playPad(int padIndex) {
@@ -219,7 +380,7 @@ public class SamplerPadUI extends VBox {
                             (int) (colorPicker.getValue().getRed() * 255),
                             (int) (colorPicker.getValue().getGreen() * 255),
                             (int) (colorPicker.getValue().getBlue() * 255));
-                    return new SamplerPad(sessionName, label, colorHex);
+                    return new SamplerPad(sessionName, label, colorHex, null);
                 }
             }
             return null;
@@ -255,8 +416,17 @@ public class SamplerPadUI extends VBox {
                 log("Warning: No project open, cannot save sampler configuration");
                 return;
             }
+
+            // Save pad configuration
             Path configFile = projectManager.getProjectDir().resolve(CONFIG_FILE);
             mapper.writeValue(configFile.toFile(), pads);
+
+            // Save MIDI mappings to project config
+            xyz.theforks.model.ProjectConfig projectConfig = projectManager.getCurrentProject();
+            if (projectConfig != null) {
+                projectConfig.setMidiMappings(new HashMap<>(midiMappings));
+                projectManager.saveProject();
+            }
         } catch (Exception e) {
             log("Error saving sampler configuration: " + e.getMessage());
         }
@@ -268,6 +438,8 @@ public class SamplerPadUI extends VBox {
                 // No project open, skip loading
                 return;
             }
+
+            // Load pad configuration
             Path configFile = projectManager.getProjectDir().resolve(CONFIG_FILE);
             if (configFile.toFile().exists()) {
                 Map<String, SamplerPad> loadedPads = mapper.readValue(
@@ -280,6 +452,51 @@ public class SamplerPadUI extends VBox {
                     SamplerPad pad = entry.getValue();
                     pads.put(padIndex, pad);
                     updatePadButton(padIndex, pad);
+                }
+            }
+
+            // Load MIDI mappings from project config
+            xyz.theforks.model.ProjectConfig projectConfig = projectManager.getCurrentProject();
+            if (projectConfig != null) {
+                // Restore MIDI device selection
+                String savedDeviceName = projectConfig.getMidiDeviceName();
+                if (savedDeviceName != null && !savedDeviceName.isEmpty()) {
+                    // Try to reconnect to the saved device
+                    if (midiService.openDevice(savedDeviceName)) {
+                        // Set the combo box value
+                        Platform.runLater(() -> {
+                            midiDeviceSelector.setValue(savedDeviceName);
+                            midiLearnButton.setDisable(false);
+                        });
+                        log("Auto-reconnected to MIDI device: " + savedDeviceName);
+                    } else {
+                        log("Could not reconnect to saved MIDI device: " + savedDeviceName);
+                        // Still set it in the combo box so user can see what was previously selected
+                        Platform.runLater(() -> {
+                            midiDeviceSelector.setValue(savedDeviceName);
+                        });
+                    }
+                }
+
+                // Load MIDI mappings
+                Map<Integer, String> loadedMappings = projectConfig.getMidiMappings();
+                if (loadedMappings != null) {
+                    midiMappings.clear();
+                    midiService.clearAllHandlers();
+
+                    for (Map.Entry<Integer, String> entry : loadedMappings.entrySet()) {
+                        int padIndex = entry.getKey();
+                        String midiKey = entry.getValue();
+
+                        midiMappings.put(padIndex, midiKey);
+
+                        // Register handler
+                        midiService.registerMessageHandler(midiKey, (num, vel) -> {
+                            Platform.runLater(() -> triggerPad(padIndex));
+                        });
+
+                        log("Loaded MIDI mapping: Pad " + padIndex + " -> " + midiKey);
+                    }
                 }
             }
         } catch (Exception e) {

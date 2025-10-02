@@ -183,9 +183,22 @@
             <artifactId>js-scriptengine</artifactId>
             <version>23.0.2</version>
         </dependency>
+
+        <!-- CoreMIDI4J for better MIDI support on macOS -->
+        <dependency>
+            <groupId>uk.co.xfactory-librarians</groupId>
+            <artifactId>coremidi4j</artifactId>
+            <version>1.6</version>
+        </dependency>
     </dependencies>
 
     <build>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>true</filtering>
+            </resource>
+        </resources>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
