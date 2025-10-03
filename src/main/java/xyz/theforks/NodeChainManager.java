@@ -27,11 +27,14 @@ import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
+import javafx.scene.control.Tooltip;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
+import org.kordamp.ikonli.javafx.FontIcon;
+import org.kordamp.ikonli.ionicons4.Ionicons4IOS;
 import xyz.theforks.Playback;
 import xyz.theforks.nodes.OSCNode;
 import xyz.theforks.nodes.NodeRegistry;
@@ -312,23 +315,58 @@ public class NodeChainManager {
     }
 
     private void setupNodeButtons(HBox nodeButtons) {
-        Button newButton = new Button("New");
-        Button loadButton = new Button("Load");
-        Button addNode = new Button("Add");
-        Button removeNode = new Button("Remove");
-        Button debugButton = new Button("Debug");
-        Button saveButton = new Button("Save");
-        Button saveAsButton = new Button("Save As");
+        // Create icon-only buttons with larger light grey icons
+        FontIcon addIcon = new FontIcon(Ionicons4IOS.ADD);
+        addIcon.setIconSize(20);
+        addIcon.setIconColor(javafx.scene.paint.Color.LIGHTGRAY);
+        Button addNode = new Button("", addIcon);
+        addNode.setTooltip(new Tooltip("Add"));
 
-        // Make all buttons the same width but not too wide
-        double buttonWidth = 80;
-        newButton.setPrefWidth(buttonWidth);
-        loadButton.setPrefWidth(buttonWidth);
-        addNode.setPrefWidth(buttonWidth);
-        removeNode.setPrefWidth(buttonWidth);
-        debugButton.setPrefWidth(buttonWidth);
-        saveButton.setPrefWidth(buttonWidth);
-        saveAsButton.setPrefWidth(buttonWidth);
+        FontIcon removeIcon = new FontIcon(Ionicons4IOS.REMOVE);
+        removeIcon.setIconSize(20);
+        removeIcon.setIconColor(javafx.scene.paint.Color.LIGHTGRAY);
+        Button removeNode = new Button("", removeIcon);
+        removeNode.setTooltip(new Tooltip("Remove"));
+
+        FontIcon debugIcon = new FontIcon(Ionicons4IOS.BUG);
+        debugIcon.setIconSize(20);
+        debugIcon.setIconColor(javafx.scene.paint.Color.LIGHTGRAY);
+        Button debugButton = new Button("", debugIcon);
+        debugButton.setTooltip(new Tooltip("Debug"));
+
+        FontIcon newIcon = new FontIcon(Ionicons4IOS.DOCUMENT);
+        newIcon.setIconSize(20);
+        newIcon.setIconColor(javafx.scene.paint.Color.LIGHTGRAY);
+        Button newButton = new Button("", newIcon);
+        newButton.setTooltip(new Tooltip("New"));
+
+        FontIcon loadIcon = new FontIcon(Ionicons4IOS.FOLDER_OPEN);
+        loadIcon.setIconSize(20);
+        loadIcon.setIconColor(javafx.scene.paint.Color.LIGHTGRAY);
+        Button loadButton = new Button("", loadIcon);
+        loadButton.setTooltip(new Tooltip("Load"));
+
+        FontIcon saveIcon = new FontIcon(Ionicons4IOS.SAVE);
+        saveIcon.setIconSize(20);
+        saveIcon.setIconColor(javafx.scene.paint.Color.LIGHTGRAY);
+        Button saveButton = new Button("", saveIcon);
+        saveButton.setTooltip(new Tooltip("Save"));
+
+        FontIcon saveAsIcon = new FontIcon(Ionicons4IOS.COPY);
+        saveAsIcon.setIconSize(20);
+        saveAsIcon.setIconColor(javafx.scene.paint.Color.LIGHTGRAY);
+        Button saveAsButton = new Button("", saveAsIcon);
+        saveAsButton.setTooltip(new Tooltip("Save As"));
+
+        // Make all buttons the same size (square for icon-only)
+        double buttonSize = 24;
+        newButton.setPrefSize(buttonSize, buttonSize);
+        loadButton.setPrefSize(buttonSize, buttonSize);
+        addNode.setPrefSize(buttonSize, buttonSize);
+        removeNode.setPrefSize(buttonSize, buttonSize);
+        debugButton.setPrefSize(buttonSize, buttonSize);
+        saveButton.setPrefSize(buttonSize, buttonSize);
+        saveAsButton.setPrefSize(buttonSize, buttonSize);
 
         // Set button actions
         newButton.setOnAction(e -> {

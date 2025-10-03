@@ -73,6 +73,7 @@ public class OSCProxyApp extends Application {
     private Button recordButton;
     private Label messageCountLabel;
     private ComboBox<String> sessionComboBox;
+    private ComboBox<String> playbackOutputComboBox;
     private Button playButton;
     private Button stopPlaybackButton;
     private ProgressBar playbackProgress;
@@ -314,37 +315,50 @@ public class OSCProxyApp extends Application {
         proxyPane.setCollapsible(true);
         grid.add(proxyPane, 0, 0, GridPane.REMAINING, 1);
 
-        // Create TabPane for Record/Playback and Sampler
+        // Create TabPane for Record, Playback, Sampler, and Edit
         TabPane tabPane = new TabPane();
         tabPane.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
 
-        // Recording controls (always records raw input)
-        VBox recordingSection = new VBox(5);
+        // Recording tab - Recording controls (always records raw input)
+        VBox recordingSection = new VBox(10);
+        recordingSection.setPadding(new Insets(10));
         HBox recordingControls = new HBox(10);
         recordButton = new Button("Start Recording");
         messageCountLabel = new Label("Messages: 0");
         recordingControls.getChildren().addAll(recordButton, messageCountLabel);
         recordingSection.getChildren().add(recordingControls);
 
-        // Playback controls
-        VBox playbackControls = new VBox(10);
+        Tab recordTab = new Tab("Record", recordingSection);
+
+        // Playback tab - Playback controls
+        VBox playbackSection = new VBox(10);
+        playbackSection.setPadding(new Insets(10));
+
+        // Output routing selector
+        HBox playbackRoutingBox = new HBox(10);
+        playbackRoutingBox.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+        Label playbackRoutingLabel = new Label("Route to Output:");
+        playbackRoutingLabel.setStyle("-fx-text-fill: white;");
+        playbackOutputComboBox = new ComboBox<>();
+        playbackOutputComboBox.getItems().add("Proxy");
+        playbackOutputComboBox.setValue("Proxy");
+        playbackOutputComboBox.setMinWidth(200);
+        playbackRoutingBox.getChildren().addAll(playbackRoutingLabel, playbackOutputComboBox);
 
         // Session selection
         HBox sessionControls = new HBox(10);
         sessionComboBox = new ComboBox<>();
-        sessionComboBox.setMaxWidth(Double.MAX_VALUE);
+        sessionComboBox.setMaxWidth(200);
         playButton = new Button("Play");
         stopPlaybackButton = new Button("Stop");
         stopPlaybackButton.setDisable(true);
         manageButton = new Button("Manage");
 
-
         sessionControls.getChildren().addAll(
                 new Label("Recordings:"),
                 sessionComboBox,
                 playButton,
-                stopPlaybackButton,
-                manageButton
+                stopPlaybackButton
         );
 
         // Progress bar
@@ -358,19 +372,15 @@ public class OSCProxyApp extends Application {
         audioFileLabel = new Label("No Audio");
         audioControls.getChildren().addAll(selectAudioButton, audioFileLabel);
 
-        playbackControls.getChildren().addAll(
+        playbackSection.getChildren().addAll(
+                playbackRoutingBox,
                 sessionControls,
                 playbackProgress,
                 playbackStatusLabel,
                 audioControls
         );
 
-        // Create Record/Playback tab content
-        VBox recordPlaybackBox = new VBox(10);
-        recordPlaybackBox.setPadding(new Insets(4));
-        recordPlaybackBox.getChildren().addAll(recordingSection, playbackControls);
-
-        Tab recordPlaybackTab = new Tab("Record / Playback", recordPlaybackBox);
+        Tab playbackTab = new Tab("Playback", playbackSection);
 
         // Create Sampler tab content
         SamplerPadUI samplerPadUI = new SamplerPadUI(proxyService, playback, logArea, projectManager);
@@ -382,8 +392,8 @@ public class OSCProxyApp extends Application {
         RecordingEditorUI editorUI = new RecordingEditorUI(proxyService, logArea, this::updateSessionsList);
         Tab editTab = new Tab("Edit", editorUI);
 
-        // Add tabs to TabPane
-        tabPane.getTabs().addAll(recordPlaybackTab, samplerTab, editTab);
+        // Add tabs to TabPane in order: Record, Playback, Sampler, Edit
+        tabPane.getTabs().addAll(recordTab, playbackTab, samplerTab, editTab);
 
         grid.add(tabPane, 0, 1, GridPane.REMAINING, 1);
 
@@ -457,22 +467,13 @@ public class OSCProxyApp extends Application {
         GridPane.setHgrow(outHostField, Priority.ALWAYS);
         
         // Make recording controls expand
-        GridPane.setHgrow(recordingControls, Priority.ALWAYS);
         HBox.setHgrow(messageCountLabel, Priority.ALWAYS);
 
         // Make session controls expand
-        GridPane.setHgrow(sessionControls, Priority.ALWAYS);
         HBox.setHgrow(sessionComboBox, Priority.ALWAYS);
-        
-        // Make playback controls expand
-        GridPane.setHgrow(playbackControls, Priority.ALWAYS);
-        
+
         // Make audio controls expand
-        GridPane.setHgrow(audioControls, Priority.ALWAYS);
         HBox.setHgrow(audioFileLabel, Priority.ALWAYS);
-        
-        // Make sampler controls expand
-        //GridPane.setHgrow(openPadsControls, Priority.ALWAYS);
 
         // Configure main grid column constraints to make it expand to window width
         ColumnConstraints mainCol = new ColumnConstraints();
@@ -770,10 +771,22 @@ public class OSCProxyApp extends Application {
             } catch (IOException ioex) {
                 log("Error starting output: " + ioex.getMessage());
             }
-           
+
             playback.setProxyService(proxyService);
+
+            // Set output routing based on playback output selector
+            String outputRoute = playbackOutputComboBox.getValue();
+            if (outputRoute != null && !outputRoute.equals("Proxy")) {
+                // Route to specific output
+                playback.setTargetOutputId(outputRoute);
+                log("Playing session: " + sessionComboBox.getSelectionModel().getSelectedItem() + " -> " + outputRoute);
+            } else {
+                // Route to all enabled outputs (Proxy mode)
+                playback.setTargetOutputId(null);
+                log("Playing session: " + sessionComboBox.getSelectionModel().getSelectedItem() + " -> Proxy (all enabled)");
+            }
+
             playback.playSession(sessionComboBox.getSelectionModel().getSelectedItem());
-            log("Playing session: " + sessionComboBox.getSelectionModel().getSelectedItem());
         });
 
         stopPlaybackButton.setOnAction(e -> {
@@ -1008,6 +1021,25 @@ public class OSCProxyApp extends Application {
         } else if (!outputComboBox.getItems().isEmpty()) {
             outputComboBox.getSelectionModel().selectFirst();
             selectedOutputId = outputComboBox.getItems().get(0);
+        }
+
+        // Update playback output combo box
+        if (playbackOutputComboBox != null) {
+            String playbackSelection = playbackOutputComboBox.getSelectionModel().getSelectedItem();
+            // Clear and re-add items (keep "Proxy" as first item)
+            playbackOutputComboBox.getItems().clear();
+            playbackOutputComboBox.getItems().add("Proxy");
+
+            for (OSCOutputService output : proxyService.getOutputs()) {
+                playbackOutputComboBox.getItems().add(output.getId());
+            }
+
+            // Restore previous selection if it still exists
+            if (playbackSelection != null && playbackOutputComboBox.getItems().contains(playbackSelection)) {
+                playbackOutputComboBox.getSelectionModel().select(playbackSelection);
+            } else {
+                playbackOutputComboBox.getSelectionModel().select("Proxy");
+            }
         }
     }
 

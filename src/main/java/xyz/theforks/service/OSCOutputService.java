@@ -53,6 +53,11 @@ public class OSCOutputService {
      * @param bypassEnabledCheck If true, send even if output is disabled (for direct routing)
      */
     public void send(OSCMessage message, boolean bypassEnabledCheck) throws IOException, OSCSerializeException {
+        // If bypassing enabled check and sender is not initialized, start the output
+        if (bypassEnabledCheck && sender == null) {
+            start();
+        }
+
         if (sender == null || message == null) {
             return;
         }
