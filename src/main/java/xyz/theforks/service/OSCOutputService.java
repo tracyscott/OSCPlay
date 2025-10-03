@@ -44,7 +44,21 @@ public class OSCOutputService {
 
 
     public void send(OSCMessage message) throws IOException, OSCSerializeException {
-        if (!enabled || sender == null || message == null) {
+        send(message, false);
+    }
+
+    /**
+     * Send an OSC message through this output.
+     * @param message The message to send
+     * @param bypassEnabledCheck If true, send even if output is disabled (for direct routing)
+     */
+    public void send(OSCMessage message, boolean bypassEnabledCheck) throws IOException, OSCSerializeException {
+        if (sender == null || message == null) {
+            return;
+        }
+
+        // Only check enabled flag if not bypassing
+        if (!bypassEnabledCheck && !enabled) {
             return;
         }
 

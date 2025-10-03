@@ -23,34 +23,41 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * UI component for a 4x4 sampler pad grid.
+ * UI component for a 4x4 sampler pad grid with 4 banks.
  */
 public class SamplerPadUI extends VBox {
     private static final int GRID_SIZE = 4;
+    private static final int NUM_BANKS = 4;
+    private static final int PADS_PER_BANK = 16;
     private static final String CONFIG_FILE = "sampler_pads.json";
 
     private final OSCProxyService proxyService;
     private final Playback playback;
     private final TextArea logArea;
     private final ProjectManager projectManager;
-    private final GridPane padGrid;
-    private final Map<Integer, SamplerPad> pads;
-    private final Map<Integer, Button> padButtons;
-    private final Map<Integer, Integer> activePads; // Maps padIndex to playing state
+    private final Map<Integer, GridPane> bankGrids; // Maps bank index to GridPane
+    private final Map<Integer, Map<Integer, SamplerPad>> bankPads; // Maps bank -> (padIndex -> SamplerPad)
+    private final Map<Integer, Map<Integer, Button>> bankPadButtons; // Maps bank -> (padIndex -> Button)
+    private final Map<Integer, ComboBox<String>> bankOutputRoutes; // Maps bank -> output routing ComboBox
+    private final Map<String, Integer> activePads; // Maps "bank:padIndex" to playing state
     private final ObjectMapper mapper;
     private final MIDIService midiService;
-    private final Map<Integer, String> midiMappings; // Maps padIndex to MIDI key
+    private final Map<String, String> midiMappings; // Maps "bank:padIndex" to MIDI key
     private ComboBox<String> midiDeviceSelector;
     private ToggleButton midiLearnButton;
+    private int learnBankNumber = -1;
     private int learnPadNumber = -1;
+    private boolean isLoading = false;
 
     public SamplerPadUI(OSCProxyService proxyService, Playback playback, TextArea logArea, ProjectManager projectManager) {
         this.proxyService = proxyService;
         this.playback = playback;
         this.logArea = logArea;
         this.projectManager = projectManager;
-        this.pads = new HashMap<>();
-        this.padButtons = new HashMap<>();
+        this.bankGrids = new HashMap<>();
+        this.bankPads = new HashMap<>();
+        this.bankPadButtons = new HashMap<>();
+        this.bankOutputRoutes = new HashMap<>();
         this.activePads = new HashMap<>();
         this.mapper = new ObjectMapper();
         this.midiService = new MIDIService();
@@ -60,8 +67,11 @@ public class SamplerPadUI extends VBox {
         playback.isPlayingProperty().addListener((obs, wasPlaying, isPlaying) -> {
             if (!isPlaying) {
                 // Playback stopped - restore all active pad colors
-                for (Integer padIndex : new HashMap<>(activePads).keySet()) {
-                    restorePadColor(padIndex);
+                for (String padKey : new HashMap<>(activePads).keySet()) {
+                    String[] parts = padKey.split(":");
+                    int bank = Integer.parseInt(parts[0]);
+                    int padIndex = Integer.parseInt(parts[1]);
+                    restorePadColor(bank, padIndex);
                 }
             }
         });
@@ -72,20 +82,65 @@ public class SamplerPadUI extends VBox {
         // Create MIDI controls
         HBox midiControls = createMIDIControls();
 
-        // Create pad grid
-        padGrid = new GridPane();
-        padGrid.setHgap(5);
-        padGrid.setVgap(5);
-        padGrid.setPadding(new Insets(10));
+        // Create TabPane for banks
+        TabPane bankTabPane = new TabPane();
+        bankTabPane.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
 
-        // Initialize pads
-        initializePads();
+        // Initialize banks
+        for (int bank = 0; bank < NUM_BANKS; bank++) {
+            bankPads.put(bank, new HashMap<>());
+            bankPadButtons.put(bank, new HashMap<>());
+
+            // Create container for routing selector and pad grid
+            VBox bankContainer = new VBox(10);
+            bankContainer.setPadding(new Insets(10));
+
+            // Create output routing selector
+            HBox routingBox = new HBox(10);
+            routingBox.setAlignment(Pos.CENTER_LEFT);
+            Label routingLabel = new Label("Route to Output:");
+            routingLabel.setStyle("-fx-text-fill: white;");
+            ComboBox<String> outputRouteCombo = new ComboBox<>();
+            outputRouteCombo.getItems().add("Proxy");
+            updateOutputRouteComboBox(outputRouteCombo);
+            outputRouteCombo.setValue("Proxy");
+            outputRouteCombo.setMinWidth(200);
+            bankOutputRoutes.put(bank, outputRouteCombo);
+
+            // Save configuration when output route changes (but not during initial load)
+            final int bankIndex = bank;
+            outputRouteCombo.setOnAction(e -> {
+                if (!isLoading) {
+                    String route = outputRouteCombo.getValue();
+                    log("Bank " + (bankIndex + 1) + " output route changed to: " + route);
+                    saveConfiguration();
+                }
+            });
+
+            routingBox.getChildren().addAll(routingLabel, outputRouteCombo);
+
+            // Create pad grid for this bank
+            GridPane padGrid = new GridPane();
+            padGrid.setHgap(5);
+            padGrid.setVgap(5);
+            padGrid.setPadding(new Insets(10));
+            bankGrids.put(bank, padGrid);
+
+            // Initialize pads for this bank
+            initializePadsForBank(bank, padGrid);
+
+            bankContainer.getChildren().addAll(routingBox, padGrid);
+
+            // Create tab for this bank
+            Tab bankTab = new Tab("Bank " + (bank + 1), bankContainer);
+            bankTabPane.getTabs().add(bankTab);
+        }
 
         // Load saved configuration
         loadConfiguration();
 
-        // Add controls and grid to container
-        getChildren().addAll(midiControls, padGrid);
+        // Add controls and bank tabs to container
+        getChildren().addAll(midiControls, bankTabPane);
     }
 
     private HBox createMIDIControls() {
@@ -174,11 +229,13 @@ public class SamplerPadUI extends VBox {
         midiDeviceSelector.getItems().addAll(midiService.getAvailableDevices());
     }
 
-    private void initializePads() {
+    private void initializePadsForBank(int bank, GridPane padGrid) {
+        Map<Integer, Button> padButtons = bankPadButtons.get(bank);
+
         for (int row = 0; row < GRID_SIZE; row++) {
             for (int col = 0; col < GRID_SIZE; col++) {
                 int padIndex = row * GRID_SIZE + col;
-                Button padButton = createPadButton(padIndex);
+                Button padButton = createPadButton(bank, padIndex);
                 padButtons.put(padIndex, padButton);
                 padGrid.add(padButton, col, row);
 
@@ -200,7 +257,7 @@ public class SamplerPadUI extends VBox {
         }
     }
 
-    private Button createPadButton(int padIndex) {
+    private Button createPadButton(int bank, int padIndex) {
         Button button = new Button("Empty");
         button.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
         button.setPrefSize(150, 150);
@@ -209,9 +266,9 @@ public class SamplerPadUI extends VBox {
         // Left click: play pad or handle MIDI learn
         button.setOnAction(e -> {
             if (midiLearnButton != null && midiLearnButton.isSelected()) {
-                handleMIDILearn(padIndex);
+                handleMIDILearn(bank, padIndex);
             } else {
-                playPad(padIndex);
+                playPad(bank, padIndex);
             }
         });
 
@@ -220,14 +277,15 @@ public class SamplerPadUI extends VBox {
             ContextMenu contextMenu = new ContextMenu();
 
             MenuItem configureItem = new MenuItem("Configure Pad...");
-            configureItem.setOnAction(ev -> configurePad(padIndex));
+            configureItem.setOnAction(ev -> configurePad(bank, padIndex));
 
             MenuItem clearItem = new MenuItem("Clear Pad");
-            clearItem.setOnAction(ev -> clearPad(padIndex));
+            clearItem.setOnAction(ev -> clearPad(bank, padIndex));
 
             MenuItem clearMidiItem = new MenuItem("Clear MIDI Mapping");
-            clearMidiItem.setOnAction(ev -> clearMIDIMapping(padIndex));
-            clearMidiItem.setDisable(!midiMappings.containsKey(padIndex));
+            String padKey = bank + ":" + padIndex;
+            clearMidiItem.setOnAction(ev -> clearMIDIMapping(bank, padIndex));
+            clearMidiItem.setDisable(!midiMappings.containsKey(padKey));
 
             contextMenu.getItems().addAll(configureItem, clearItem, new SeparatorMenuItem(), clearMidiItem);
             contextMenu.show(button, e.getScreenX(), e.getScreenY());
@@ -236,30 +294,32 @@ public class SamplerPadUI extends VBox {
         return button;
     }
 
-    private void handleMIDILearn(int padIndex) {
+    private void handleMIDILearn(int bank, int padIndex) {
+        learnBankNumber = bank;
         learnPadNumber = padIndex;
-        log("Pad " + padIndex + " selected. Now press a MIDI button...");
+        log("Bank " + (bank + 1) + " Pad " + padIndex + " selected. Now press a MIDI button...");
 
         // Enable learn mode in MIDI service
         midiService.enableLearnMode((messageType, midiNumber) -> {
             Platform.runLater(() -> {
                 String midiKey = (messageType == 0 ? "note:" : "cc:") + midiNumber;
                 String messageTypeName = (messageType == 0 ? "Note" : "CC");
+                String padKey = bank + ":" + padIndex;
 
                 // Remove old mapping if exists
-                if (midiMappings.containsKey(padIndex)) {
-                    midiService.unregisterMessageHandler(midiMappings.get(padIndex));
+                if (midiMappings.containsKey(padKey)) {
+                    midiService.unregisterMessageHandler(midiMappings.get(padKey));
                 }
 
                 // Store new mapping
-                midiMappings.put(padIndex, midiKey);
+                midiMappings.put(padKey, midiKey);
 
                 // Register handler to trigger pad
                 midiService.registerMessageHandler(midiKey, (num, vel) -> {
-                    Platform.runLater(() -> triggerPad(padIndex));
+                    Platform.runLater(() -> triggerPad(bank, padIndex));
                 });
 
-                log("Pad " + padIndex + " mapped to MIDI " + messageTypeName + " " + midiNumber);
+                log("Bank " + (bank + 1) + " Pad " + padIndex + " mapped to MIDI " + messageTypeName + " " + midiNumber);
                 saveConfiguration();
 
                 // Reset learn mode
@@ -271,51 +331,103 @@ public class SamplerPadUI extends VBox {
                     -fx-min-width: 100px;
                     -fx-min-height: 28px;
                     """);
+                learnBankNumber = -1;
                 learnPadNumber = -1;
             });
         });
     }
 
-    private void triggerPad(int padIndex) {
-        playPad(padIndex);
+    private void triggerPad(int bank, int padIndex) {
+        playPad(bank, padIndex);
     }
 
-    private void clearMIDIMapping(int padIndex) {
-        String midiKey = midiMappings.remove(padIndex);
+    /**
+     * Public method to trigger a pad from OSC messages.
+     * @param bankNumber Bank number (1-4)
+     * @param padNumber Pad number (1-16)
+     */
+    public void triggerPadFromOSC(int bankNumber, int padNumber) {
+        // Convert 1-based bank number to 0-based bank index
+        int bank = bankNumber - 1;
+        // Convert 1-based pad number to 0-based pad index
+        int padIndex = padNumber - 1;
+
+        // Validate bank and pad numbers
+        if (bank < 0 || bank >= NUM_BANKS) {
+            log("Invalid bank number: " + bankNumber + " (must be 1-" + NUM_BANKS + ")");
+            return;
+        }
+        if (padIndex < 0 || padIndex >= PADS_PER_BANK) {
+            log("Invalid pad number: " + padNumber + " (must be 1-" + PADS_PER_BANK + ")");
+            return;
+        }
+
+        // Trigger the pad on the JavaFX thread
+        javafx.application.Platform.runLater(() -> triggerPad(bank, padIndex));
+    }
+
+    private void clearMIDIMapping(int bank, int padIndex) {
+        String padKey = bank + ":" + padIndex;
+        String midiKey = midiMappings.remove(padKey);
         if (midiKey != null) {
             midiService.unregisterMessageHandler(midiKey);
-            log("Cleared MIDI mapping for pad " + padIndex);
+            log("Cleared MIDI mapping for Bank " + (bank + 1) + " Pad " + padIndex);
             saveConfiguration();
         }
     }
 
-    private void playPad(int padIndex) {
+    private void playPad(int bank, int padIndex) {
+        String padKey = bank + ":" + padIndex;
+
         // Check if this pad is currently playing - if so, stop it
-        if (activePads.containsKey(padIndex)) {
+        if (activePads.containsKey(padKey)) {
             playback.stopPlayback();
-            restorePadColor(padIndex);
-            log("Stopped pad " + padIndex);
+            restorePadColor(bank, padIndex);
+            log("Stopped Bank " + (bank + 1) + " Pad " + padIndex);
             return;
         }
 
+        Map<Integer, SamplerPad> pads = bankPads.get(bank);
         SamplerPad pad = pads.get(padIndex);
         if (pad == null || pad.isEmpty()) {
-            log("Pad " + padIndex + " is empty");
+            log("Bank " + (bank + 1) + " Pad " + padIndex + " is empty");
             return;
         }
 
         // Change button to dark red
+        Map<Integer, Button> padButtons = bankPadButtons.get(bank);
         Button button = padButtons.get(padIndex);
-        activePads.put(padIndex, padIndex);
+        activePads.put(padKey, padIndex);
         button.setStyle("-fx-background-color: #8B0000; -fx-text-fill: white; -fx-font-size: 14px;");
 
         playback.setProxyService(proxyService);
+
+        // Set output routing based on bank's outputRoute (not pad's)
+        ComboBox<String> routeCombo = bankOutputRoutes.get(bank);
+        String outputRoute = (routeCombo != null && routeCombo.getValue() != null)
+            ? routeCombo.getValue()
+            : "Proxy";
+
+        log("DEBUG: Bank " + (bank + 1) + " outputRoute = '" + outputRoute + "'");
+        if (outputRoute != null && !outputRoute.equals("Proxy")) {
+            // Route to specific output
+            playback.setTargetOutputId(outputRoute);
+            log("Playing Bank " + (bank + 1) + " Pad " + (padIndex + 1) + ": " + pad.getSessionName() + " -> " + outputRoute);
+        } else {
+            // Route to all enabled outputs (Proxy mode)
+            playback.setTargetOutputId(null);
+            log("Playing Bank " + (bank + 1) + " Pad " + (padIndex + 1) + ": " + pad.getSessionName() + " -> Proxy (all enabled)");
+        }
+
         playback.playSession(pad.getSessionName());
-        log("Playing pad " + padIndex + ": " + pad.getSessionName());
     }
 
-    private void restorePadColor(int padIndex) {
-        activePads.remove(padIndex);
+    private void restorePadColor(int bank, int padIndex) {
+        String padKey = bank + ":" + padIndex;
+        activePads.remove(padKey);
+
+        Map<Integer, SamplerPad> pads = bankPads.get(bank);
+        Map<Integer, Button> padButtons = bankPadButtons.get(bank);
         SamplerPad pad = pads.get(padIndex);
         Button button = padButtons.get(padIndex);
 
@@ -328,9 +440,9 @@ public class SamplerPadUI extends VBox {
         }
     }
 
-    private void configurePad(int padIndex) {
+    private void configurePad(int bank, int padIndex) {
         Dialog<SamplerPad> dialog = new Dialog<>();
-        dialog.setTitle("Configure Pad " + padIndex);
+        dialog.setTitle("Configure Bank " + (bank + 1) + " Pad " + padIndex);
         dialog.setHeaderText("Map a recording to this pad");
 
         // Create dialog content
@@ -349,6 +461,7 @@ public class SamplerPadUI extends VBox {
         ColorPicker colorPicker = new ColorPicker(Color.web("#888888"));
 
         // Set current values if pad is configured
+        Map<Integer, SamplerPad> pads = bankPads.get(bank);
         SamplerPad currentPad = pads.get(padIndex);
         if (currentPad != null && !currentPad.isEmpty()) {
             sessionCombo.setValue(currentPad.getSessionName());
@@ -380,7 +493,9 @@ public class SamplerPadUI extends VBox {
                             (int) (colorPicker.getValue().getRed() * 255),
                             (int) (colorPicker.getValue().getGreen() * 255),
                             (int) (colorPicker.getValue().getBlue() * 255));
-                    return new SamplerPad(sessionName, label, colorHex, null);
+                    // Output route is stored at bank level, not pad level
+                    SamplerPad newPad = new SamplerPad(sessionName, label, colorHex, null, null);
+                    return newPad;
                 }
             }
             return null;
@@ -388,21 +503,24 @@ public class SamplerPadUI extends VBox {
 
         dialog.showAndWait().ifPresent(pad -> {
             pads.put(padIndex, pad);
-            updatePadButton(padIndex, pad);
+            updatePadButton(bank, padIndex, pad);
             saveConfiguration();
         });
     }
 
-    private void clearPad(int padIndex) {
+    private void clearPad(int bank, int padIndex) {
+        Map<Integer, SamplerPad> pads = bankPads.get(bank);
+        Map<Integer, Button> padButtons = bankPadButtons.get(bank);
         pads.remove(padIndex);
         Button button = padButtons.get(padIndex);
         button.setText("Empty");
         button.setStyle("-fx-background-color: #888888; -fx-text-fill: white; -fx-font-size: 14px;");
         saveConfiguration();
-        log("Cleared pad " + padIndex);
+        log("Cleared Bank " + (bank + 1) + " Pad " + padIndex);
     }
 
-    private void updatePadButton(int padIndex, SamplerPad pad) {
+    private void updatePadButton(int bank, int padIndex, SamplerPad pad) {
+        Map<Integer, Button> padButtons = bankPadButtons.get(bank);
         Button button = padButtons.get(padIndex);
         button.setText(pad.getLabel());
         button.setStyle(String.format(
@@ -417,14 +535,47 @@ public class SamplerPadUI extends VBox {
                 return;
             }
 
-            // Save pad configuration
+            // Save pad configuration (convert to flat structure for serialization)
+            Map<String, Object> config = new HashMap<>();
+            Map<String, SamplerPad> flatPads = new HashMap<>();
+            Map<String, String> bankRoutes = new HashMap<>();
+
+            for (Map.Entry<Integer, Map<Integer, SamplerPad>> bankEntry : bankPads.entrySet()) {
+                int bank = bankEntry.getKey();
+                for (Map.Entry<Integer, SamplerPad> padEntry : bankEntry.getValue().entrySet()) {
+                    int padIndex = padEntry.getKey();
+                    String key = bank + ":" + padIndex;
+                    flatPads.put(key, padEntry.getValue());
+                }
+
+                // Save bank output routing
+                ComboBox<String> routeCombo = bankOutputRoutes.get(bank);
+                if (routeCombo != null && routeCombo.getValue() != null) {
+                    String route = routeCombo.getValue();
+                    bankRoutes.put(String.valueOf(bank), route);
+                    log("Saving Bank " + (bank + 1) + " route: '" + route + "'");
+                }
+            }
+
+            config.put("pads", flatPads);
+            config.put("bankRoutes", bankRoutes);
+
             Path configFile = projectManager.getProjectDir().resolve(CONFIG_FILE);
-            mapper.writeValue(configFile.toFile(), pads);
+            mapper.writeValue(configFile.toFile(), config);
+            log("Saved configuration with " + bankRoutes.size() + " bank routes");
 
             // Save MIDI mappings to project config
             xyz.theforks.model.ProjectConfig projectConfig = projectManager.getCurrentProject();
             if (projectConfig != null) {
-                projectConfig.setMidiMappings(new HashMap<>(midiMappings));
+                // Convert String keys to Integer keys for backward compatibility
+                Map<Integer, String> legacyMappings = new HashMap<>();
+                for (Map.Entry<String, String> entry : midiMappings.entrySet()) {
+                    // Store with composite key as a string in the project config
+                    // We'll use a negative hash to avoid collisions with old single-bank format
+                    int key = entry.getKey().hashCode();
+                    legacyMappings.put(key, entry.getValue() + "|" + entry.getKey());
+                }
+                projectConfig.setMidiMappings(legacyMappings);
                 projectManager.saveProject();
             }
         } catch (Exception e) {
@@ -433,6 +584,7 @@ public class SamplerPadUI extends VBox {
     }
 
     private void loadConfiguration() {
+        isLoading = true;
         try {
             if (projectManager == null || !projectManager.hasOpenProject()) {
                 // No project open, skip loading
@@ -442,16 +594,72 @@ public class SamplerPadUI extends VBox {
             // Load pad configuration
             Path configFile = projectManager.getProjectDir().resolve(CONFIG_FILE);
             if (configFile.toFile().exists()) {
-                Map<String, SamplerPad> loadedPads = mapper.readValue(
+                // Try to load new format with pads and bankRoutes
+                Map<String, Object> config = mapper.readValue(
                         configFile.toFile(),
-                        mapper.getTypeFactory().constructMapType(HashMap.class, String.class, SamplerPad.class));
+                        mapper.getTypeFactory().constructMapType(HashMap.class, String.class, Object.class));
 
-                // Convert String keys to Integer
+                // Load pads
+                Object padsObj = config.get("pads");
+                Map<String, SamplerPad> loadedPads;
+                if (padsObj != null) {
+                    loadedPads = mapper.convertValue(padsObj,
+                            mapper.getTypeFactory().constructMapType(HashMap.class, String.class, SamplerPad.class));
+                } else {
+                    // Legacy format: entire config is just pads
+                    loadedPads = mapper.convertValue(config,
+                            mapper.getTypeFactory().constructMapType(HashMap.class, String.class, SamplerPad.class));
+                }
+
+                // Parse keys as "bank:padIndex" or legacy integer format
                 for (Map.Entry<String, SamplerPad> entry : loadedPads.entrySet()) {
-                    int padIndex = Integer.parseInt(entry.getKey());
+                    String key = entry.getKey();
                     SamplerPad pad = entry.getValue();
-                    pads.put(padIndex, pad);
-                    updatePadButton(padIndex, pad);
+
+                    // Check if key contains ":" (new format)
+                    if (key.contains(":")) {
+                        String[] parts = key.split(":");
+                        int bank = Integer.parseInt(parts[0]);
+                        int padIndex = Integer.parseInt(parts[1]);
+                        Map<Integer, SamplerPad> pads = bankPads.get(bank);
+                        if (pads != null) {
+                            pads.put(padIndex, pad);
+                            updatePadButton(bank, padIndex, pad);
+                            log("Loaded pad Bank " + (bank + 1) + " Pad " + (padIndex + 1) +
+                                " outputRoute: '" + pad.getOutputRoute() + "'");
+                        }
+                    } else {
+                        // Legacy format: assume bank 0
+                        int padIndex = Integer.parseInt(key);
+                        Map<Integer, SamplerPad> pads = bankPads.get(0);
+                        if (pads != null) {
+                            pads.put(padIndex, pad);
+                            updatePadButton(0, padIndex, pad);
+                            log("Loaded pad Bank 1 Pad " + (padIndex + 1) +
+                                " outputRoute: '" + pad.getOutputRoute() + "' (legacy)");
+                        }
+                    }
+                }
+
+                // Load bank output routing
+                Object routesObj = config.get("bankRoutes");
+                if (routesObj != null) {
+                    Map<String, String> bankRoutes = mapper.convertValue(routesObj,
+                            mapper.getTypeFactory().constructMapType(HashMap.class, String.class, String.class));
+
+                    for (Map.Entry<String, String> routeEntry : bankRoutes.entrySet()) {
+                        int bank = Integer.parseInt(routeEntry.getKey());
+                        String route = routeEntry.getValue();
+                        ComboBox<String> routeCombo = bankOutputRoutes.get(bank);
+                        if (routeCombo != null) {
+                            // Make sure the route exists in the combo box
+                            if (!routeCombo.getItems().contains(route)) {
+                                routeCombo.getItems().add(route);
+                            }
+                            routeCombo.setValue(route);
+                            log("Loaded Bank " + (bank + 1) + " output route: '" + route + "'");
+                        }
+                    }
                 }
             }
 
@@ -485,22 +693,58 @@ public class SamplerPadUI extends VBox {
                     midiService.clearAllHandlers();
 
                     for (Map.Entry<Integer, String> entry : loadedMappings.entrySet()) {
-                        int padIndex = entry.getKey();
-                        String midiKey = entry.getValue();
+                        String value = entry.getValue();
 
-                        midiMappings.put(padIndex, midiKey);
+                        // New format: "midiKey|bank:padIndex"
+                        if (value.contains("|")) {
+                            String[] parts = value.split("\\|");
+                            String midiKey = parts[0];
+                            String padKey = parts[1];
 
-                        // Register handler
-                        midiService.registerMessageHandler(midiKey, (num, vel) -> {
-                            Platform.runLater(() -> triggerPad(padIndex));
-                        });
+                            midiMappings.put(padKey, midiKey);
 
-                        log("Loaded MIDI mapping: Pad " + padIndex + " -> " + midiKey);
+                            // Parse bank and pad from padKey
+                            String[] padParts = padKey.split(":");
+                            int bank = Integer.parseInt(padParts[0]);
+                            int padIndex = Integer.parseInt(padParts[1]);
+
+                            // Register handler
+                            midiService.registerMessageHandler(midiKey, (num, vel) -> {
+                                Platform.runLater(() -> triggerPad(bank, padIndex));
+                            });
+
+                            log("Loaded MIDI mapping: Bank " + (bank + 1) + " Pad " + padIndex + " -> " + midiKey);
+                        } else {
+                            // Legacy format: assume bank 0
+                            int padIndex = entry.getKey();
+                            String midiKey = value;
+                            String padKey = "0:" + padIndex;
+
+                            midiMappings.put(padKey, midiKey);
+
+                            // Register handler
+                            midiService.registerMessageHandler(midiKey, (num, vel) -> {
+                                Platform.runLater(() -> triggerPad(0, padIndex));
+                            });
+
+                            log("Loaded MIDI mapping (legacy): Bank 1 Pad " + padIndex + " -> " + midiKey);
+                        }
                     }
                 }
             }
         } catch (Exception e) {
             log("Error loading sampler configuration: " + e.getMessage());
+        } finally {
+            isLoading = false;
+        }
+    }
+
+    private void updateOutputRouteComboBox(ComboBox<String> comboBox) {
+        // Add all available outputs from the proxy service
+        for (xyz.theforks.service.OSCOutputService output : proxyService.getOutputs()) {
+            if (!comboBox.getItems().contains(output.getId())) {
+                comboBox.getItems().add(output.getId());
+            }
         }
     }
 

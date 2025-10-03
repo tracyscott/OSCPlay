@@ -29,7 +29,9 @@ public class OSCProxyService {
     private boolean isRecording = false;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final IntegerProperty messageCount = new SimpleIntegerProperty(0);
+    private final IntegerProperty totalMessageCount = new SimpleIntegerProperty(0);
     private ProjectManager projectManager;
+    private xyz.theforks.ui.SamplerPadUI samplerPadUI;
 
     public OSCProxyService() {
         this(null);
@@ -119,6 +121,10 @@ public class OSCProxyService {
         return messageCount;
     }
 
+    public IntegerProperty totalMessageCountProperty() {
+        return totalMessageCount;
+    }
+
     public void setInPort(int port) {
         inputService.setInPort(port);
     }
@@ -172,6 +178,18 @@ public class OSCProxyService {
 
     private void handleMessage(OSCMessage oscMessage) {
         try {
+            // Increment total message count for all messages (including /oscplay)
+            if (oscMessage != null) {
+                Platform.runLater(() -> totalMessageCount.set(totalMessageCount.get() + 1));
+            }
+
+            // Check if this is an /oscplay command
+            if (oscMessage != null && oscMessage.getAddress().startsWith("/oscplay")) {
+                // Handle /oscplay messages without recording or forwarding
+                handleOSCPlayCommand(oscMessage);
+                return;
+            }
+
             // Always record raw input messages (before any processing)
             if (isRecording && currentSession != null && oscMessage != null) {
                 recordMessage(oscMessage);
@@ -188,6 +206,54 @@ public class OSCProxyService {
         } catch (IOException | OSCSerializeException e) {
             System.err.println("Error handling message: " + e.getMessage());
             e.printStackTrace();
+        }
+    }
+
+    /**
+     * Handle /oscplay command messages.
+     * Format: /oscplay/sampler<bank> <padNumber>
+     * Example: /oscplay/sampler1 1 triggers bank 1, pad 1
+     */
+    private void handleOSCPlayCommand(OSCMessage message) {
+        String address = message.getAddress();
+
+        // Parse the address pattern: /oscplay/sampler<bank>
+        if (address.matches("/oscplay/sampler[1-4]")) {
+            try {
+                // Extract bank number from address
+                int bankNumber = Integer.parseInt(address.substring("/oscplay/sampler".length()));
+
+                // Get pad number from first argument
+                if (message.getArguments().isEmpty()) {
+                    System.err.println("OSCPlay command missing pad number: " + address);
+                    return;
+                }
+
+                Object arg = message.getArguments().get(0);
+                int padNumber;
+                if (arg instanceof Integer) {
+                    padNumber = (Integer) arg;
+                } else if (arg instanceof Float) {
+                    padNumber = ((Float) arg).intValue();
+                } else if (arg instanceof String) {
+                    padNumber = Integer.parseInt((String) arg);
+                } else {
+                    System.err.println("OSCPlay command has invalid pad number type: " + arg.getClass().getName());
+                    return;
+                }
+
+                // Trigger the sampler pad
+                if (samplerPadUI != null) {
+                    samplerPadUI.triggerPadFromOSC(bankNumber, padNumber);
+                } else {
+                    System.err.println("SamplerPadUI not set - cannot trigger pad");
+                }
+
+            } catch (NumberFormatException | IndexOutOfBoundsException e) {
+                System.err.println("Error parsing OSCPlay command: " + address + " - " + e.getMessage());
+            }
+        } else {
+            System.err.println("Unknown OSCPlay command: " + address);
         }
     }
 
@@ -252,6 +318,10 @@ public class OSCProxyService {
 
     public void setProjectManager(ProjectManager projectManager) {
         this.projectManager = projectManager;
+    }
+
+    public void setSamplerPadUI(xyz.theforks.ui.SamplerPadUI samplerPadUI) {
+        this.samplerPadUI = samplerPadUI;
     }
     
     /**

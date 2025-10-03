@@ -41,6 +41,7 @@ public class Playback {
     private MediaPlayer mediaPlayer;
     private boolean mediaReady = false;
     private OSCProxyService proxyService;
+    private String targetOutputId = null; // null means all enabled outputs
 
     public Playback() {
         DataDirectory.createDirectories();
@@ -104,6 +105,14 @@ public class Playback {
      */
     public void setProxyService(OSCProxyService proxyService) {
         this.proxyService = proxyService;
+    }
+
+    /**
+     * Set the target output ID for playback routing.
+     * @param outputId The output ID to route to, or null for all enabled outputs
+     */
+    public void setTargetOutputId(String outputId) {
+        this.targetOutputId = outputId;
     }
 
     public void playSession(String sessionName) {
@@ -195,11 +204,24 @@ public class Playback {
 
                                 OSCMessage oscMsg = new OSCMessage(msg.getAddress(), List.of(msg.getArguments()));
 
-                                // Send to all enabled outputs, each output applies its own node chain
+                                // Send to specific output or all enabled outputs
                                 if (proxyService != null) {
-                                    for (OSCOutputService output : proxyService.getOutputs()) {
-                                        if (output.isEnabled()) {
-                                            output.send(oscMsg);
+                                    if (targetOutputId != null) {
+                                        // Route to specific output (bypass enabled check)
+                                        OSCOutputService targetOutput = proxyService.getOutput(targetOutputId);
+                                        if (targetOutput != null) {
+                                            System.out.println("DEBUG: Sending message to output '" + targetOutputId + "': " + oscMsg.getAddress());
+                                            targetOutput.send(oscMsg, true);  // bypass enabled check
+                                            System.out.println("DEBUG: Message sent successfully");
+                                        } else {
+                                            System.err.println("DEBUG: Target output '" + targetOutputId + "' not found!");
+                                        }
+                                    } else {
+                                        // Route to all enabled outputs (respect enabled check)
+                                        for (OSCOutputService output : proxyService.getOutputs()) {
+                                            if (output.isEnabled()) {
+                                                output.send(oscMsg);
+                                            }
                                         }
                                     }
                                 }
@@ -210,6 +232,7 @@ public class Playback {
                             break;
                         } catch (Exception e) {
                             System.err.println("Error playing message: " + e.getMessage());
+                            e.printStackTrace();
                         }
                     }
                 } finally {

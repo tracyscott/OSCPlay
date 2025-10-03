@@ -46,6 +46,7 @@ import xyz.theforks.service.OSCOutputService;
 import xyz.theforks.service.OSCProxyService;
 import xyz.theforks.service.ProjectManager;
 import xyz.theforks.ui.ProjectSplashScreen;
+import xyz.theforks.ui.RecordingEditorUI;
 import xyz.theforks.ui.SamplerPadUI;
 import xyz.theforks.ui.Theme;
 import xyz.theforks.ui.MonitorWindow;
@@ -65,6 +66,7 @@ public class OSCProxyApp extends Application {
     // UI Components
     private TextField inHostField;
     private TextField inPortField;
+    private Label inMessageCountLabel;
     private TextField outHostField;
     private TextField outPortField;
     private Button manageButton;
@@ -207,15 +209,15 @@ public class OSCProxyApp extends Application {
 
         // Create UI components
         GridPane grid = new GridPane();
-        grid.setPadding(new Insets(10));
+        grid.setPadding(new Insets(4));
         grid.setHgap(10);
-        grid.setVgap(10);
+        grid.setVgap(2);
 
         // PROXY SECTION (encapsulates everything before Record/Playback)
         GridPane proxyGrid = new GridPane();
         proxyGrid.setHgap(10);
-        proxyGrid.setVgap(10);
-        proxyGrid.setPadding(new Insets(10));
+        proxyGrid.setVgap(2);
+        proxyGrid.setPadding(new Insets(4));
 
         // Input configuration
         Label inLabel = new Label("In");
@@ -229,6 +231,10 @@ public class OSCProxyApp extends Application {
         inPortField.setMaxWidth(200);  // Doubled from 100
         inPortField.setStyle("-fx-font-size: 11px;");
         proxyGrid.add(inPortField, 2, 0);
+        inMessageCountLabel = new Label("0");
+        inMessageCountLabel.setStyle("-fx-text-fill: #888888; -fx-font-size: 11px;");
+        inMessageCountLabel.setMinWidth(40);
+        proxyGrid.add(inMessageCountLabel, 3, 0);
 
         // Output selection and management (row 1)
         HBox outputSelectionBox = new HBox(10);
@@ -361,17 +367,23 @@ public class OSCProxyApp extends Application {
 
         // Create Record/Playback tab content
         VBox recordPlaybackBox = new VBox(10);
-        recordPlaybackBox.setPadding(new Insets(10));
+        recordPlaybackBox.setPadding(new Insets(4));
         recordPlaybackBox.getChildren().addAll(recordingSection, playbackControls);
 
         Tab recordPlaybackTab = new Tab("Record / Playback", recordPlaybackBox);
 
         // Create Sampler tab content
         SamplerPadUI samplerPadUI = new SamplerPadUI(proxyService, playback, logArea, projectManager);
+        // Connect sampler pad UI to proxy service for OSC command handling
+        proxyService.setSamplerPadUI(samplerPadUI);
         Tab samplerTab = new Tab("Sampler", samplerPadUI);
 
+        // Create Edit tab content
+        RecordingEditorUI editorUI = new RecordingEditorUI(proxyService, logArea, this::updateSessionsList);
+        Tab editTab = new Tab("Edit", editorUI);
+
         // Add tabs to TabPane
-        tabPane.getTabs().addAll(recordPlaybackTab, samplerTab);
+        tabPane.getTabs().addAll(recordPlaybackTab, samplerTab, editTab);
 
         grid.add(tabPane, 0, 1, GridPane.REMAINING, 1);
 
@@ -387,7 +399,7 @@ public class OSCProxyApp extends Application {
 
         // Status bar
         statusBar.setMaxWidth(Double.MAX_VALUE);
-        statusBar.setPadding(new Insets(5));
+        statusBar.setPadding(new Insets(4));
         statusBar.getStyleClass().add("status-bar");
         grid.add(statusBar, 0, 3, GridPane.REMAINING, 1);
 
@@ -409,6 +421,10 @@ public class OSCProxyApp extends Application {
         // Bind properties
         proxyService.messageCountProperty().addListener((obs, oldVal, newVal)
                 -> messageCountLabel.setText("Messages: " + newVal.intValue()));
+
+        // Bind total message count to the input message count label
+        proxyService.totalMessageCountProperty().addListener((obs, oldVal, newVal)
+                -> inMessageCountLabel.setText(String.valueOf(newVal.intValue())));
 
         
         playback.playbackProgressProperty().addListener((obs, oldVal, newVal) -> {

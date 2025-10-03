@@ -149,7 +149,7 @@ public class NodeChainManager {
         grid.add(nodeButtons, 0, startRow + 1, GridPane.REMAINING, 1); // Span all columns
 
         nodesListView = new ListView<>(activeNodes);
-        nodesListView.setMinHeight(150);
+        nodesListView.setMinHeight(120);
         nodesListView.setMaxHeight(Double.MAX_VALUE);
         setupNodesListView();
 
