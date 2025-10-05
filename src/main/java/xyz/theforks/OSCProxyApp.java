@@ -797,17 +797,8 @@ public class OSCProxyApp extends Application {
             defaultOutput.getNodeChain().clearNodes();
         }
 
-        // Reset sampler bank output routes to "Proxy"
-        if (samplerPadUI != null) {
-            for (int bank = 0; bank < 4; bank++) {
-                ComboBox<String> routeCombo = samplerPadUI.getBankOutputRoute(bank);
-                if (routeCombo != null) {
-                    routeCombo.setValue("Proxy");
-                }
-            }
-            // Clear all sampler pads
-            samplerPadUI.clearAllPads();
-        }
+        // Don't clear sampler pads - reloadConfiguration() will overwrite them
+        // Clearing causes a race condition where the async clear overwrites the loaded config
 
         // Reset recording editor to "New" with empty table
         if (recordingEditorUI != null) {

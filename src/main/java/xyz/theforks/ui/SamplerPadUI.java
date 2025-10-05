@@ -751,8 +751,31 @@ public class SamplerPadUI extends VBox {
     /**
      * Clear all sampler pad configurations and reset to empty state.
      * This includes clearing all pad assignments, bank output routes, and MIDI mappings.
+     * Saves the cleared configuration to disk.
      */
     public void clearAllPads() {
+        clearAllPadsInternal(true);
+    }
+
+    /**
+     * Clear all sampler pad configurations and reset to empty state without saving.
+     * Used when switching projects to clear UI before loading new configuration.
+     */
+    public void clearAllPadsWithoutSaving() {
+        clearAllPadsInternal(false);
+    }
+
+    /**
+     * Clear all sampler pad configurations and reset to empty state.
+     * @param saveConfig If true, saves the cleared configuration to disk
+     */
+    private void clearAllPadsInternal(boolean saveConfig) {
+        // Always set loading flag when not saving to prevent combo box events from triggering saves
+        boolean previousLoadingState = isLoading;
+        if (!saveConfig) {
+            isLoading = true;
+        }
+
         Platform.runLater(() -> {
             // Clear all pad configurations
             for (Map.Entry<Integer, Map<Integer, SamplerPad>> bankEntry : bankPads.entrySet()) {
@@ -787,8 +810,12 @@ public class SamplerPadUI extends VBox {
             // Clear active pads
             activePads.clear();
 
-            // Save the cleared configuration
-            saveConfiguration();
+            // Save the cleared configuration only if requested
+            if (saveConfig) {
+                saveConfiguration();
+                isLoading = previousLoadingState; // Restore previous state
+            }
+            // If not saving, leave isLoading = true for loadConfiguration to handle
 
             log("Cleared all sampler pads and configurations");
         });
@@ -799,6 +826,43 @@ public class SamplerPadUI extends VBox {
      * Should be called when switching projects.
      */
     public void reloadConfiguration() {
+        isLoading = true;  // Prevent any saves during reload
+
+        // Reset all UI elements to empty state (synchronously, no Platform.runLater)
+        for (Map.Entry<Integer, Map<Integer, SamplerPad>> bankEntry : bankPads.entrySet()) {
+            int bank = bankEntry.getKey();
+            Map<Integer, SamplerPad> pads = bankEntry.getValue();
+            pads.clear();
+
+            // Reset all buttons for this bank to empty
+            Map<Integer, Button> buttons = bankPadButtons.get(bank);
+            if (buttons != null) {
+                for (Map.Entry<Integer, Button> buttonEntry : buttons.entrySet()) {
+                    Button button = buttonEntry.getValue();
+                    button.setText("Empty");
+                    button.setStyle("-fx-background-color: #888888; -fx-text-fill: white; -fx-font-size: 14px;");
+                }
+            }
+
+            // Reset bank output route to Proxy
+            ComboBox<String> routeCombo = bankOutputRoutes.get(bank);
+            if (routeCombo != null) {
+                routeCombo.setValue("Proxy");
+            }
+        }
+
+        // Clear other data
+        midiMappings.clear();
+        activePads.clear();
+
+        // Update output route combo boxes with current outputs before loading config
+        for (ComboBox<String> routeCombo : bankOutputRoutes.values()) {
+            if (routeCombo != null) {
+                updateOutputRouteComboBox(routeCombo);
+            }
+        }
+
+        // loadConfiguration will load new data and set isLoading = false in finally
         loadConfiguration();
     }
 
