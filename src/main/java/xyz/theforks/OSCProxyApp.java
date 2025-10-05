@@ -839,9 +839,11 @@ public class OSCProxyApp extends Application {
             log("loadProjectConfiguration: Setting input fields - host:" + project.getInHost() + " port:" + project.getInPort());
             if (inHostField != null) {
                 inHostField.setText(project.getInHost());
+                inHostField.setStyle("-fx-font-size: 11px;"); // Clear edited styling
             }
             if (inPortField != null) {
                 inPortField.setText(String.valueOf(project.getInPort()));
+                inPortField.setStyle("-fx-font-size: 11px;"); // Clear edited styling
             }
         }
 
