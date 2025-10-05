@@ -203,7 +203,10 @@ public class InterlaceMagNode implements OSCNode {
     }
 
     @Override
-    public OSCMessage process(OSCMessage message) {
+    public void process(java.util.List<xyz.theforks.model.MessageRequest> requests) {
+        OSCMessage message = inputMessage(requests);
+        if (message == null) return;
+
         Object[] arguments = message.getArguments().toArray();
         if (arguments.length == 3) {
             double x = ((Number)arguments[0]).doubleValue();
@@ -213,13 +216,13 @@ public class InterlaceMagNode implements OSCNode {
             double[] closest = findClosestPoint(x, y, z);
             float t = (float)closest[3];  // Normalized position along curve
 
-            arguments[0] = t;
             // System.out.println("Interlacing Mag" + magNum + " at t=" + t);
             String newAddress = message.getAddress();
             //String newAddress = message.getAddress().replace("Mag", "Angle").replace("mag", "angle");
-            return new OSCMessage(newAddress, Arrays.asList(arguments[0]));
+            OSCMessage processedMessage = new OSCMessage(newAddress, Arrays.asList(t));
+            replaceMessage(requests, processedMessage);
         }
-        return message;
+        // Otherwise pass through unchanged
     }
 
     public List<double[]> getCalibrationData() {

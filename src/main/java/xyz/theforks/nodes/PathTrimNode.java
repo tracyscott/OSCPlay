@@ -56,7 +56,10 @@ public class PathTrimNode implements OSCNode {
     }
 
     @Override
-    public OSCMessage process(OSCMessage message) {
+    public void process(java.util.List<xyz.theforks.model.MessageRequest> requests) {
+        OSCMessage message = inputMessage(requests);
+        if (message == null) return;
+
         String addr = message.getAddress();
         if (addr.matches(addressPattern)) {
             // Find the last slash in the address
@@ -71,12 +74,13 @@ public class PathTrimNode implements OSCNode {
                 newArguments.add(lastComponent);
                 newArguments.addAll(message.getArguments());
 
-                return new OSCMessage(trimmedPath, newArguments);
+                OSCMessage trimmedMessage = new OSCMessage(trimmedPath, newArguments);
+                replaceMessage(requests, trimmedMessage);
+                return;
             }
         }
 
-        // Return original message if it doesn't match our criteria or has no trimmable path
-        return message;
+        // Pass through unchanged if it doesn't match our criteria or has no trimmable path
     }
 
     @Override

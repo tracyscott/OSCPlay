@@ -15,13 +15,17 @@ public class PitchShiftNode implements OSCNode {
     }
 
     @Override
-    public OSCMessage process(OSCMessage message) {
+    public void process(java.util.List<xyz.theforks.model.MessageRequest> requests) {
+        OSCMessage message = inputMessage(requests);
+        if (message == null) return;
+
         Object[] arguments = message.getArguments().toArray();
         if (arguments.length > 0 && arguments[0] instanceof Integer) {
             arguments[0] = (Integer)arguments[0] + 12; // Shift up one octave
-            return new OSCMessage(message.getAddress(), Arrays.asList(arguments));
+            OSCMessage shiftedMessage = new OSCMessage(message.getAddress(), Arrays.asList(arguments));
+            replaceMessage(requests, shiftedMessage);
         }
-        return message;
+        // Otherwise pass through unchanged
     }
 
     @Override

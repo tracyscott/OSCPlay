@@ -6,8 +6,10 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -15,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import com.illposed.osc.OSCMessage;
+import xyz.theforks.model.MessageRequest;
 
 class ScriptNodeTest {
 
@@ -78,7 +81,11 @@ class ScriptNodeTest {
         OSCMessage input = new OSCMessage("/test/message", Collections.singletonList("test"));
 
         // Should return original message when script not loaded
-        OSCMessage result = node.process(input);
+        List<MessageRequest> requests = new ArrayList<>();
+        requests.add(new MessageRequest(input));
+        node.process(requests);
+        assertFalse(requests.isEmpty());
+        OSCMessage result = requests.get(0).getMessage();
         assertEquals(input, result);
     }
 
@@ -97,8 +104,12 @@ class ScriptNodeTest {
         assertTrue(node.configure(new String[]{"/test/*", scriptPath.toString()}));
 
         OSCMessage input = new OSCMessage("/test/message", Arrays.asList(1, 2.5f, "test"));
-        OSCMessage result = node.process(input);
+        List<MessageRequest> requests = new ArrayList<>();
+        requests.add(new MessageRequest(input));
+        node.process(requests);
 
+        assertFalse(requests.isEmpty());
+        OSCMessage result = requests.get(0).getMessage();
         assertNotNull(result);
         assertEquals(input.getAddress(), result.getAddress());
         assertEquals(input.getArguments(), result.getArguments());
@@ -128,8 +139,12 @@ class ScriptNodeTest {
         node.configure(new String[]{"/test/*", scriptPath.toString()});
 
         OSCMessage input = new OSCMessage("/test/message", Arrays.asList(1, "hello", 2.5f));
-        OSCMessage result = node.process(input);
+        List<MessageRequest> requests = new ArrayList<>();
+        requests.add(new MessageRequest(input));
+        node.process(requests);
 
+        assertFalse(requests.isEmpty());
+        OSCMessage result = requests.get(0).getMessage();
         assertNotNull(result);
         assertEquals("/test/message", result.getAddress());
         assertEquals(3, result.getArguments().size());
@@ -152,9 +167,11 @@ class ScriptNodeTest {
         node.configure(new String[]{"/test/*", scriptPath.toString()});
 
         OSCMessage input = new OSCMessage("/test/message", Collections.singletonList("test"));
-        OSCMessage result = node.process(input);
+        List<MessageRequest> requests = new ArrayList<>();
+        requests.add(new MessageRequest(input));
+        node.process(requests);
 
-        assertNull(result);
+        assertTrue(requests.isEmpty());
     }
 
     @Test
@@ -171,9 +188,11 @@ class ScriptNodeTest {
         node.configure(new String[]{"/test/*", scriptPath.toString()});
 
         OSCMessage input = new OSCMessage("/test/message", Collections.singletonList("test"));
-        OSCMessage result = node.process(input);
+        List<MessageRequest> requests = new ArrayList<>();
+        requests.add(new MessageRequest(input));
+        node.process(requests);
 
-        assertNull(result);
+        assertTrue(requests.isEmpty());
     }
 
     @Test
@@ -190,9 +209,13 @@ class ScriptNodeTest {
         node.configure(new String[]{"/test/*", scriptPath.toString()});
 
         OSCMessage input = new OSCMessage("/test/message", Collections.singletonList("test"));
-        OSCMessage result = node.process(input);
+        List<MessageRequest> requests = new ArrayList<>();
+        requests.add(new MessageRequest(input));
+        node.process(requests);
 
         // Should return original message on error
+        assertFalse(requests.isEmpty());
+        OSCMessage result = requests.get(0).getMessage();
         assertNotNull(result);
         assertEquals(input, result);
     }
@@ -211,9 +234,13 @@ class ScriptNodeTest {
         node.configure(new String[]{"/test/*", scriptPath.toString()});
 
         OSCMessage input = new OSCMessage("/test/message", Collections.singletonList("test"));
-        OSCMessage result = node.process(input);
+        List<MessageRequest> requests = new ArrayList<>();
+        requests.add(new MessageRequest(input));
+        node.process(requests);
 
         // Should return original message when process function not found
+        assertFalse(requests.isEmpty());
+        OSCMessage result = requests.get(0).getMessage();
         assertNotNull(result);
         assertEquals(input, result);
     }
@@ -251,7 +278,11 @@ class ScriptNodeTest {
 
         // Process a message with initial script
         OSCMessage input = new OSCMessage("/test/input", Collections.singletonList(1));
-        OSCMessage result1 = node.process(input);
+        List<MessageRequest> requests1 = new ArrayList<>();
+        requests1.add(new MessageRequest(input));
+        node.process(requests1);
+        assertFalse(requests1.isEmpty());
+        OSCMessage result1 = requests1.get(0).getMessage();
         assertEquals("/initial", result1.getAddress());
 
         // Wait a bit and modify the script
@@ -264,7 +295,11 @@ class ScriptNodeTest {
         Files.writeString(scriptPath, updatedScript);
 
         // Process another message - should reload and use updated script
-        OSCMessage result2 = node.process(input);
+        List<MessageRequest> requests2 = new ArrayList<>();
+        requests2.add(new MessageRequest(input));
+        node.process(requests2);
+        assertFalse(requests2.isEmpty());
+        OSCMessage result2 = requests2.get(0).getMessage();
         assertEquals("/updated", result2.getAddress());
     }
 

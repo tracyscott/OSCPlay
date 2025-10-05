@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import com.illposed.osc.OSCMessage;
+import xyz.theforks.model.MessageRequest;
 import xyz.theforks.ui.NodeChainDebugWindow;
 
 /**
@@ -24,6 +25,7 @@ public class NodeChain {
     private volatile boolean enabled;
     private final Context context;
     private volatile NodeChainDebugWindow debugWindow;
+    private ThreadLocal<PlaybackContext> currentContext = new ThreadLocal<>();
 
     public NodeChain(Context context) {
         this.context = context;
@@ -32,41 +34,94 @@ public class NodeChain {
     }
 
     /**
-     * Apply the node chain to an OSC message.
+     * Process message without context (for proxy/input use).
      * @param message The original OSC message
-     * @return The processed message, or null if a node cancelled the message
+     * @return List of message requests (may be empty to drop, or multiple for expansion)
      */
-    public OSCMessage processMessage(OSCMessage message) {
+    public List<MessageRequest> processMessage(OSCMessage message) {
+        return processMessage(message, null);
+    }
+
+    /**
+     * Process message with optional playback context.
+     * @param message The original OSC message
+     * @param playbackContext Optional context for playback operations (null for non-playback)
+     * @return List of message requests (may be empty to drop, or multiple for expansion)
+     */
+    public List<MessageRequest> processMessage(OSCMessage message, PlaybackContext playbackContext) {
         if (!enabled || message == null) {
-            return message;
+            List<MessageRequest> result = new ArrayList<>(1);
+            result.add(new MessageRequest(message));
+            return result;
         }
 
-        // Debug: log raw input
-        if (debugWindow != null && debugWindow.isOpen()) {
-            debugWindow.addRawMessage(message);
-        }
+        // Store context for this processing chain
+        currentContext.set(playbackContext);
 
-        OSCMessage processedMessage = message;
-        String address = message.getAddress();
-
-        for (OSCNode node : nodes) {
-            if (address.matches(node.getAddressPattern())) {
-                processedMessage = node.process(processedMessage);
-
-                // Debug: log node output
-                if (debugWindow != null && debugWindow.isOpen()) {
-                    debugWindow.addNodeOutput(node.label(), processedMessage);
-                }
-
-                if (processedMessage == null) {
-                    return null; // Node cancelled the message
-                }
-                // Update address in case it was changed by the node
-                address = processedMessage.getAddress();
+        try {
+            // Debug: log raw input
+            if (debugWindow != null && debugWindow.isOpen()) {
+                debugWindow.addRawMessage(message);
             }
-        }
 
-        return processedMessage;
+            // Create working list with initial message
+            List<MessageRequest> requests = new ArrayList<>();
+            requests.add(new MessageRequest(message));
+
+            // Process through each node
+            for (OSCNode node : nodes) {
+                // We need to process each request separately and collect results
+                // because a node might need to expand some requests but not others
+                List<MessageRequest> nextRequests = new ArrayList<>();
+
+                for (MessageRequest req : requests) {
+                    String address = req.getMessage().getAddress();
+
+                    if (address.matches(node.getAddressPattern())) {
+                        // Node matches - process it
+                        // Create a temporary list with just this request
+                        List<MessageRequest> tempList = new ArrayList<>();
+                        tempList.add(req);
+
+                        // Node modifies list in-place
+                        node.process(tempList);
+
+                        // Debug: log node output
+                        if (debugWindow != null && debugWindow.isOpen()) {
+                            for (MessageRequest processed : tempList) {
+                                debugWindow.addNodeOutput(node.label(), processed.getMessage());
+                            }
+                        }
+
+                        // Collect results
+                        nextRequests.addAll(tempList);
+                    } else {
+                        // Node doesn't match - pass through unchanged
+                        nextRequests.add(req);
+                    }
+                }
+
+                requests = nextRequests;
+
+                // If all messages dropped, exit early
+                if (requests.isEmpty()) {
+                    return requests;
+                }
+            }
+
+            return requests;
+
+        } finally {
+            currentContext.remove();
+        }
+    }
+
+    /**
+     * Get the current playback context (for use by nodes if needed in future).
+     * @return The context, or null if not in playback mode
+     */
+    public PlaybackContext getPlaybackContext() {
+        return currentContext.get();
     }
 
     /**

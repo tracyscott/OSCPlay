@@ -224,11 +224,17 @@ public class OSCProxyApp extends Application {
         Label inLabel = new Label("In");
         inLabel.setMinWidth(20);
         proxyGrid.add(inLabel, 0, 0);
-        inHostField = new TextField("127.0.0.1");
+
+        // Load input host and port from project config
+        ProjectConfig project = projectManager.getCurrentProject();
+        String initialInHost = project != null ? project.getInHost() : "127.0.0.1";
+        int initialInPort = project != null ? project.getInPort() : 8000;
+
+        inHostField = new TextField(initialInHost);
         inHostField.setMinWidth(200);  // Doubled from 250
         inHostField.setStyle("-fx-font-size: 11px;");
         proxyGrid.add(inHostField, 1, 0);
-        inPortField = new TextField("8000");
+        inPortField = new TextField(String.valueOf(initialInPort));
         inPortField.setMaxWidth(200);  // Doubled from 100
         inPortField.setStyle("-fx-font-size: 11px;");
         proxyGrid.add(inPortField, 2, 0);
@@ -692,6 +698,17 @@ public class OSCProxyApp extends Application {
         // Initialize outputs from project
         initializeOutputsFromProject();
 
+        // Load input host and port from project
+        ProjectConfig project = projectManager.getCurrentProject();
+        if (project != null) {
+            if (inHostField != null) {
+                inHostField.setText(project.getInHost());
+            }
+            if (inPortField != null) {
+                inPortField.setText(String.valueOf(project.getInPort()));
+            }
+        }
+
         // Update UI components (only if they exist)
         if (outputComboBox != null) {
             updateOutputsList();
@@ -714,6 +731,14 @@ public class OSCProxyApp extends Application {
         if (project != null) {
             // Save playback mode (always WITH_REWRITE now)
             project.setPlaybackMode(PlaybackMode.WITH_REWRITE);
+
+            // Save input host and port
+            project.setInHost(inHostField.getText());
+            try {
+                project.setInPort(Integer.parseInt(inPortField.getText()));
+            } catch (NumberFormatException e) {
+                // Keep existing port if field has invalid value
+            }
 
             // Save outputs
             project.getOutputs().clear();

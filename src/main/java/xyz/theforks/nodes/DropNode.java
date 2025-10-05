@@ -53,14 +53,16 @@ public class DropNode implements OSCNode {
     }
 
     @Override
-    public OSCMessage process(OSCMessage message) {
+    public void process(java.util.List<xyz.theforks.model.MessageRequest> requests) {
+        OSCMessage message = inputMessage(requests);
+        if (message == null) return;
+
         String addr = message.getAddress();
         if (addr.matches(addressPattern)) {
-            // Drop the message by returning null
-            return null;
+            // Drop messages that match
+            dropMessage(requests);
         }
-        // Let the message pass through
-        return message;
+        // Otherwise pass through unchanged (do nothing)
     }
 
     @Override

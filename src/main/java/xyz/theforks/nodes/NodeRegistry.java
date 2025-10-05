@@ -10,7 +10,8 @@ public class NodeRegistry {
         new PathTrimNode(),
         new DropNode(),
         new PassNode(),
-        new ScriptNode()
+        new ScriptNode(),
+        new SplitterNode()
     };
 
     public static OSCNode[] getNodes() {

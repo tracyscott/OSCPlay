@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
+import java.util.PriorityQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -18,9 +19,11 @@ import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.property.SimpleDoubleProperty;
 import javafx.scene.media.Media;
 import javafx.scene.media.MediaPlayer;
+import xyz.theforks.model.MessageRequest;
 import xyz.theforks.model.OSCMessageRecord;
 import xyz.theforks.model.RecordingSession;
 import xyz.theforks.model.SessionSettings;
+import xyz.theforks.nodes.PlaybackContext;
 import xyz.theforks.service.OSCOutputService;
 import xyz.theforks.service.OSCProxyService;
 import xyz.theforks.util.DataDirectory;
@@ -30,7 +33,7 @@ import xyz.theforks.util.DataDirectory;
  * of this class, one for each trigger.
  */
 
-public class Playback {
+public class Playback implements PlaybackContext {
 
     private final DoubleProperty playbackProgress = new SimpleDoubleProperty(0);
     private final BooleanProperty isPlaying = new SimpleBooleanProperty(false);
@@ -42,6 +45,31 @@ public class Playback {
     private boolean mediaReady = false;
     private OSCProxyService proxyService;
     private String targetOutputId = null; // null means all enabled outputs
+
+    // Fields for delayed message handling
+    private PriorityQueue<ScheduledMessage> messageQueue;
+    private long playbackStartTime;
+    private long sessionStartTime;
+
+    /**
+     * Internal class for scheduled messages with routing info
+     */
+    private static class ScheduledMessage implements Comparable<ScheduledMessage> {
+        final OSCMessageRecord record;
+        final long absoluteTimestamp;
+        final String targetOutputId;  // null = all enabled, specific = route to this output only
+
+        ScheduledMessage(OSCMessageRecord record, long absoluteTimestamp, String targetOutputId) {
+            this.record = record;
+            this.absoluteTimestamp = absoluteTimestamp;
+            this.targetOutputId = targetOutputId;
+        }
+
+        @Override
+        public int compareTo(ScheduledMessage other) {
+            return Long.compare(this.absoluteTimestamp, other.absoluteTimestamp);
+        }
+    }
 
     public Playback() {
         DataDirectory.createDirectories();
@@ -115,6 +143,40 @@ public class Playback {
         this.targetOutputId = outputId;
     }
 
+    // ========== PlaybackContext Implementation ==========
+
+    @Override
+    public void scheduleDelayedMessage(MessageRequest request, String outputId) {
+        long absoluteTime = sessionStartTime + getCurrentPlaybackTime() + request.getDelayMs();
+
+        // Create a new OSCMessageRecord from the request
+        OSCMessageRecord record = new OSCMessageRecord(
+            request.getMessage().getAddress(),
+            request.getMessage().getArguments().toArray()
+        );
+        record.setTimestamp(absoluteTime);
+
+        // Determine target output: use request's target if specified, otherwise the current output
+        String targetOutput = request.hasTargetOutput() ?
+            request.getTargetOutputId() : outputId;
+
+        ScheduledMessage scheduled = new ScheduledMessage(record, absoluteTime, targetOutput);
+
+        synchronized(messageQueue) {
+            messageQueue.offer(scheduled);
+        }
+
+        System.out.println("Scheduled delayed message: " + record.getAddress() +
+                         " delay=" + request.getDelayMs() + "ms output=" + targetOutput);
+    }
+
+    @Override
+    public long getCurrentPlaybackTime() {
+        return System.currentTimeMillis() - playbackStartTime;
+    }
+
+    // ========== Playback Methods ==========
+
     public void playSession(String sessionName) {
         try {
             RecordingSession session = RecordingSession.loadSession(sessionName);
@@ -124,9 +186,14 @@ public class Playback {
                 return;
             }
 
+            // Initialize message queue with all session messages
+            messageQueue = new PriorityQueue<>();
+            for (OSCMessageRecord msg : session.getMessages()) {
+                messageQueue.offer(new ScheduledMessage(msg, msg.getTimestamp(), null));
+            }
 
             System.out.println("Playing session: " + sessionName
-                    + " (" + session.getMessages().size() + " messages)");
+                    + " (" + messageQueue.size() + " messages)");
 
             // Reset control flags
             stopPlayback.set(false);
@@ -139,23 +206,21 @@ public class Playback {
             // Create and start playback thread
             playbackThread = new Thread(() -> {
                 try {
-                    long startTime = System.currentTimeMillis();
                     int totalMessages = session.getMessages().size();
+                    int processedCount = 0;
                     boolean firstMessage = true;
-                    long sessionStartTime = session.getStartTime();
-                    System.out.println("Session start time: " + sessionStartTime);
-                    for (int i = 0; i < totalMessages; i++) {
-                        if (stopPlayback.get()) {
-                            break;
+
+                    while (!messageQueue.isEmpty() && !stopPlayback.get()) {
+                        ScheduledMessage scheduled;
+
+                        synchronized(messageQueue) {
+                            scheduled = messageQueue.poll();
                         }
 
-                        OSCMessageRecord msg = session.getMessages().get(i);
+                        if (scheduled == null) break;
 
                         if (firstMessage) {
                             // Start audio if associated
-                            // This is done right before sending the first message so we have better sync.  Any audio
-                            // based recording should send an OSC message immediately after starting the audio since
-                            // we have no other way of knowing when to start the audio.
                             String audioFileName = getAssociatedAudioFile(sessionName);
                             if (audioFileName != null) {
                                 File audioFile = DataDirectory.getSessionFile(sessionName, audioFileName).toFile();
@@ -177,8 +242,7 @@ public class Playback {
                             } else {
                                 mediaReady = true;
                             }
-                        }
-                        if (firstMessage) {
+
                             System.out.println("Waiting for media to be ready");
                             while (!mediaReady) {
                                 try {
@@ -186,47 +250,51 @@ public class Playback {
                                 } catch (Exception e) {
                                 }
                             }
-                            sessionStartTime = msg.getTimestamp();
+
+                            sessionStartTime = scheduled.absoluteTimestamp;
+                            playbackStartTime = System.currentTimeMillis();
                             firstMessage = false;
                             System.out.println("Playing first message");
                         }
+
                         // Update progress
-                        final double progress = (double) (i + 1) / totalMessages;
+                        processedCount++;
+                        final double progress = (double) processedCount / totalMessages;
                         Platform.runLater(() -> playbackProgress.set(progress));
 
                         try {
-                            if (msg != null && msg.getAddress() != null && msg.getArguments() != null) {
-                                // The session start time should be the time of the first message, not the time
-                                // we started recording the session. This way we can maintain the original timing.
+                            if (scheduled.record != null && scheduled.record.getAddress() != null && scheduled.record.getArguments() != null) {
+                                // Calculate delay and sleep
+                                long delay = scheduled.absoluteTimestamp - sessionStartTime;
+                                Thread.sleep(Math.max(0, delay - (System.currentTimeMillis() - playbackStartTime)));
 
-                                long delay = msg.getTimestamp() - sessionStartTime;
-                                Thread.sleep(Math.max(0, delay - (System.currentTimeMillis() - startTime)));
+                                // Create OSC message
+                                OSCMessage oscMsg = new OSCMessage(
+                                    scheduled.record.getAddress(),
+                                    List.of(scheduled.record.getArguments())
+                                );
 
-                                OSCMessage oscMsg = new OSCMessage(msg.getAddress(), List.of(msg.getArguments()));
-
-                                // Send to specific output or all enabled outputs
-                                if (proxyService != null) {
-                                    if (targetOutputId != null) {
-                                        // Route to specific output (bypass enabled check)
-                                        OSCOutputService targetOutput = proxyService.getOutput(targetOutputId);
-                                        if (targetOutput != null) {
-                                            System.out.println("DEBUG: Sending message to output '" + targetOutputId + "': " + oscMsg.getAddress());
-                                            targetOutput.send(oscMsg, true);  // bypass enabled check
-                                            System.out.println("DEBUG: Message sent successfully");
-                                        } else {
-                                            System.err.println("DEBUG: Target output '" + targetOutputId + "' not found!");
-                                        }
-                                    } else {
-                                        // Route to all enabled outputs (respect enabled check)
-                                        for (OSCOutputService output : proxyService.getOutputs()) {
-                                            if (output.isEnabled()) {
-                                                output.send(oscMsg);
-                                            }
+                                // Route based on targetOutputId
+                                if (scheduled.targetOutputId != null) {
+                                    // Send to specific output only
+                                    OSCOutputService targetOutput = proxyService.getOutput(scheduled.targetOutputId);
+                                    if (targetOutput != null) {
+                                        sendToOutput(targetOutput, oscMsg, scheduled.targetOutputId);
+                                    }
+                                } else if (targetOutputId != null) {
+                                    // Playback is configured for specific output
+                                    OSCOutputService targetOutput = proxyService.getOutput(targetOutputId);
+                                    if (targetOutput != null) {
+                                        sendToOutput(targetOutput, oscMsg, targetOutputId);
+                                    }
+                                } else {
+                                    // Send to all enabled outputs
+                                    for (OSCOutputService output : proxyService.getOutputs()) {
+                                        if (output.isEnabled()) {
+                                            sendToOutput(output, oscMsg, output.getId());
                                         }
                                     }
                                 }
-                                //System.out.println("Played back message " + (i + 1) + "/" + totalMessages +
-                                //                 ": " + msg.getAddress());
                             }
                         } catch (InterruptedException e) {
                             break;
@@ -258,6 +326,28 @@ public class Playback {
                 isPlaying.set(false);
                 playbackProgress.set(0);
             });
+        }
+    }
+
+    /**
+     * Send message to a specific output, processing through its node chain with playback context.
+     */
+    private void sendToOutput(OSCOutputService output, OSCMessage message, String outputId) {
+        try {
+            // Process through output's node chain with playback context
+            List<MessageRequest> requests = output.getNodeChain().processMessage(message, this);
+
+            for (MessageRequest req : requests) {
+                if (req.isImmediate()) {
+                    // Send immediately
+                    output.send(req.getMessage(), true);  // bypass enabled check
+                } else {
+                    // Schedule delayed message
+                    scheduleDelayedMessage(req, outputId);
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Error sending to output: " + e.getMessage());
         }
     }
      public void stopPlayback() {

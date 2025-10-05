@@ -57,7 +57,10 @@ public class IntToBangNode implements OSCNode {
     }
 
     @Override
-    public OSCMessage process(OSCMessage message) {
+    public void process(java.util.List<xyz.theforks.model.MessageRequest> requests) {
+        OSCMessage message = inputMessage(requests);
+        if (message == null) return;
+
         String addr = message.getAddress();
         if (addr.matches(addressPattern)) {
             List<Object> arguments = message.getArguments();
@@ -70,16 +73,16 @@ public class IntToBangNode implements OSCNode {
                 if (intValue == 1) {
                     OSCMessage msg = new OSCMessage(addr, new ArrayList<>());
                     msg.setInfo(new OSCMessageInfo(",I"));
-                    return msg;
+                    replaceMessage(requests, msg);
                 } else {
-                    // Drop the message by returning null
-                    return null;
+                    // Drop the message
+                    dropMessage(requests);
                 }
+                return;
             }
         }
 
-        // Return original message if it doesn't match our criteria
-        return message;
+        // Pass through unchanged if it doesn't match our criteria
     }
 
     @Override

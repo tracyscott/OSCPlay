@@ -51,10 +51,13 @@ public class MovingAvgNode implements OSCNode {
     }
 
     @Override
-    public OSCMessage process(OSCMessage message) {
+    public void process(java.util.List<xyz.theforks.model.MessageRequest> requests) {
+        OSCMessage message = inputMessage(requests);
+        if (message == null) return;
+
         List<Object> arguments = message.getArguments();
         if (arguments.size() != 1 || !(arguments.get(0) instanceof Float)) {
-            return message;
+            return; // Pass through unchanged
         }
 
         String addr = message.getAddress();
@@ -73,7 +76,8 @@ public class MovingAvgNode implements OSCNode {
         }
         float average = sum / window.size();
 
-        return new OSCMessage(addr, List.of(average));
+        OSCMessage avgMessage = new OSCMessage(addr, List.of(average));
+        replaceMessage(requests, avgMessage);
     }
 
     @Override

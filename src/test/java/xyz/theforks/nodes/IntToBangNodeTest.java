@@ -2,13 +2,16 @@ package xyz.theforks.nodes;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.illposed.osc.OSCMessage;
+import xyz.theforks.model.MessageRequest;
 
 class IntToBangNodeTest {
     private IntToBangNode node;
@@ -22,8 +25,12 @@ class IntToBangNodeTest {
     @Test
     void testConvertIntegerOneToArgumentless() {
         OSCMessage input = new OSCMessage("/trigger/button", Collections.singletonList(1));
-        OSCMessage result = node.process(input);
-        
+        List<MessageRequest> requests = new ArrayList<>();
+        requests.add(new MessageRequest(input));
+        node.process(requests);
+
+        assertFalse(requests.isEmpty());
+        OSCMessage result = requests.get(0).getMessage();
         assertNotNull(result);
         assertEquals("/trigger/button", result.getAddress());
         assertTrue(result.getArguments().isEmpty());
@@ -32,24 +39,32 @@ class IntToBangNodeTest {
     @Test
     void testDropNonOneIntegers() {
         OSCMessage input = new OSCMessage("/trigger/button", Collections.singletonList(0));
-        OSCMessage result = node.process(input);
-        
-        assertNull(result);
+        List<MessageRequest> requests = new ArrayList<>();
+        requests.add(new MessageRequest(input));
+        node.process(requests);
+
+        assertTrue(requests.isEmpty());
     }
 
     @Test
     void testDropNegativeIntegers() {
         OSCMessage input = new OSCMessage("/trigger/button", Collections.singletonList(-1));
-        OSCMessage result = node.process(input);
-        
-        assertNull(result);
+        List<MessageRequest> requests = new ArrayList<>();
+        requests.add(new MessageRequest(input));
+        node.process(requests);
+
+        assertTrue(requests.isEmpty());
     }
 
     @Test
     void testPassThroughNonMatchingAddress() {
         OSCMessage input = new OSCMessage("/other/button", Collections.singletonList(1));
-        OSCMessage result = node.process(input);
-        
+        List<MessageRequest> requests = new ArrayList<>();
+        requests.add(new MessageRequest(input));
+        node.process(requests);
+
+        assertFalse(requests.isEmpty());
+        OSCMessage result = requests.get(0).getMessage();
         assertNotNull(result);
         assertEquals(input, result);
     }
@@ -57,8 +72,12 @@ class IntToBangNodeTest {
     @Test
     void testPassThroughNonIntegerArguments() {
         OSCMessage input = new OSCMessage("/trigger/button", Collections.singletonList(1.0f));
-        OSCMessage result = node.process(input);
-        
+        List<MessageRequest> requests = new ArrayList<>();
+        requests.add(new MessageRequest(input));
+        node.process(requests);
+
+        assertFalse(requests.isEmpty());
+        OSCMessage result = requests.get(0).getMessage();
         assertNotNull(result);
         assertEquals(input, result);
     }
@@ -66,8 +85,12 @@ class IntToBangNodeTest {
     @Test
     void testPassThroughMultipleArguments() {
         OSCMessage input = new OSCMessage("/trigger/button", Arrays.asList(1, 2));
-        OSCMessage result = node.process(input);
-        
+        List<MessageRequest> requests = new ArrayList<>();
+        requests.add(new MessageRequest(input));
+        node.process(requests);
+
+        assertFalse(requests.isEmpty());
+        OSCMessage result = requests.get(0).getMessage();
         assertNotNull(result);
         assertEquals(input, result);
     }
@@ -75,8 +98,12 @@ class IntToBangNodeTest {
     @Test
     void testPassThroughNoArguments() {
         OSCMessage input = new OSCMessage("/trigger/button", Collections.emptyList());
-        OSCMessage result = node.process(input);
-        
+        List<MessageRequest> requests = new ArrayList<>();
+        requests.add(new MessageRequest(input));
+        node.process(requests);
+
+        assertFalse(requests.isEmpty());
+        OSCMessage result = requests.get(0).getMessage();
         assertNotNull(result);
         assertEquals(input, result);
     }

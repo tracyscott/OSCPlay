@@ -98,11 +98,14 @@ public class ScriptNode implements OSCNode {
     }
 
     @Override
-    public OSCMessage process(OSCMessage message) {
+    public void process(java.util.List<xyz.theforks.model.MessageRequest> requests) {
         if (engine == null || invocable == null) {
-            // Script failed to load
-            return message;
+            // Script failed to load - pass through unchanged
+            return;
         }
+
+        OSCMessage message = inputMessage(requests);
+        if (message == null) return;
 
         // Check if script file has been modified and reload if necessary
         if (hasScriptChanged()) {
@@ -114,23 +117,38 @@ public class ScriptNode implements OSCNode {
             Object result = invocable.invokeFunction("process", message);
 
             // Handle different return types
-            if (result == null) {
-                return null; // Drop the message
+            if (result == null || (result instanceof Boolean && !(Boolean) result)) {
+                // Drop the message
+                dropMessage(requests);
+            } else if (result instanceof xyz.theforks.model.MessageRequest) {
+                replaceMessage(requests, (xyz.theforks.model.MessageRequest) result);
             } else if (result instanceof OSCMessage) {
-                return (OSCMessage) result;
-            } else if (result instanceof Boolean && !(Boolean) result) {
-                return null; // Drop if function returns false
-            } else {
-                // Return original message if return value is unexpected
-                return message;
+                // Backward compatible: wrap in immediate request
+                replaceMessage(requests, (OSCMessage) result);
+            } else if (result instanceof java.util.List) {
+                // Handle array of messages or requests
+                java.util.List<?> resultList = (java.util.List<?>) result;
+                java.util.List<xyz.theforks.model.MessageRequest> newRequests = new java.util.ArrayList<>();
+
+                for (Object item : resultList) {
+                    if (item instanceof xyz.theforks.model.MessageRequest) {
+                        newRequests.add((xyz.theforks.model.MessageRequest) item);
+                    } else if (item instanceof OSCMessage) {
+                        newRequests.add(new xyz.theforks.model.MessageRequest((OSCMessage) item));
+                    }
+                }
+
+                replaceWithMultiple(requests, newRequests);
             }
+            // else: unknown type - pass through unchanged (do nothing)
+
         } catch (ScriptException | NoSuchMethodException e) {
-            // Log error but don't crash - return original message
+            // Log error and pass through original message
             if (lastError == null || !lastError.equals(e.getMessage())) {
                 lastError = e.getMessage();
                 System.err.println("ScriptNode error in " + scriptPath + ": " + e.getMessage());
             }
-            return message;
+            // Pass through unchanged (do nothing)
         }
     }
 
@@ -194,13 +212,24 @@ public class ScriptNode implements OSCNode {
             try {
                 // Create a test message
                 OSCMessage testMsg = new OSCMessage("/test/message", Arrays.asList(1, 2.5f, "test"));
-                OSCMessage result = process(testMsg);
+                java.util.List<xyz.theforks.model.MessageRequest> requests = new java.util.ArrayList<>();
+                requests.add(new xyz.theforks.model.MessageRequest(testMsg));
 
-                if (result == null) {
-                    statusLabel.setText("Test result: Message dropped (returned null)");
+                process(requests);
+
+                if (requests.isEmpty()) {
+                    statusLabel.setText("Test result: Message dropped (empty list)");
                 } else {
-                    statusLabel.setText("Test result: " + result.getAddress() +
-                                      " args=" + result.getArguments());
+                    StringBuilder sb = new StringBuilder("Test results:\n");
+                    for (xyz.theforks.model.MessageRequest req : requests) {
+                        sb.append("- ").append(req.getMessage().getAddress())
+                          .append(" args=").append(req.getMessage().getArguments());
+                        if (!req.isImmediate()) {
+                            sb.append(" (delayed ").append(req.getDelayMs()).append("ms)");
+                        }
+                        sb.append("\n");
+                    }
+                    statusLabel.setText(sb.toString());
                 }
                 statusLabel.setStyle("-fx-text-fill: blue;");
             } catch (Exception ex) {
@@ -319,13 +348,22 @@ public class ScriptNode implements OSCNode {
             bindings.put("polyglot.js.allowHostAccess", true);
             bindings.put("polyglot.js.allowHostClassLookup", (Predicate<String>) s -> true);
 
-            // Set up the engine context - expose OSCMessage class
+            // Set up the engine context - expose OSCMessage and MessageRequest classes
             engine.put("OSCMessage", OSCMessage.class);
+            engine.put("MessageRequest", xyz.theforks.model.MessageRequest.class);
 
             // Add helper function for creating new messages
             engine.eval("function createMessage(address, args) { " +
                        "  var javaList = Java.type('java.util.Arrays').asList(args); " +
                        "  return new OSCMessage(address, javaList); " +
+                       "}");
+
+            // Add helper function for creating message requests with delay/routing
+            engine.eval("function createMessageRequest(message, delay, outputId) { " +
+                       "  delay = delay || 0; " +
+                       "  outputId = outputId || null; " +
+                       "  var MessageRequest = Java.type('xyz.theforks.model.MessageRequest'); " +
+                       "  return new MessageRequest(message, delay, outputId); " +
                        "}");
 
             // Load and evaluate the script

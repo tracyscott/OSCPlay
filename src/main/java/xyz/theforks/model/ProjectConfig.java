@@ -14,6 +14,8 @@ public class ProjectConfig {
     private java.util.List<OutputConfig> outputs;
     private java.util.Map<Integer, String> midiMappings;
     private String midiDeviceName;
+    private String inHost;
+    private int inPort;
 
     public ProjectConfig() {
         this.projectName = "Untitled";
@@ -22,6 +24,8 @@ public class ProjectConfig {
         this.outputs.add(createDefaultOutput());
         this.midiMappings = new java.util.HashMap<>();
         this.midiDeviceName = null;
+        this.inHost = "127.0.0.1";
+        this.inPort = 8000;
     }
 
     @JsonCreator
@@ -30,12 +34,16 @@ public class ProjectConfig {
             @JsonProperty("playbackMode") PlaybackMode playbackMode,
             @JsonProperty("outputs") java.util.List<OutputConfig> outputs,
             @JsonProperty("midiMappings") java.util.Map<Integer, String> midiMappings,
-            @JsonProperty("midiDeviceName") String midiDeviceName) {
+            @JsonProperty("midiDeviceName") String midiDeviceName,
+            @JsonProperty("inHost") String inHost,
+            @JsonProperty("inPort") Integer inPort) {
         this.projectName = projectName != null ? projectName : "Untitled";
         this.playbackMode = playbackMode != null ? playbackMode : PlaybackMode.WITHOUT_REWRITE;
         this.outputs = outputs != null ? outputs : new java.util.ArrayList<>();
         this.midiMappings = midiMappings != null ? midiMappings : new java.util.HashMap<>();
         this.midiDeviceName = midiDeviceName;
+        this.inHost = inHost != null ? inHost : "127.0.0.1";
+        this.inPort = inPort != null ? inPort : 8000;
         if (this.outputs.isEmpty() || !hasOutput("default")) {
             this.outputs.add(0, createDefaultOutput());
         }
@@ -121,5 +129,21 @@ public class ProjectConfig {
 
     public void setMidiDeviceName(String midiDeviceName) {
         this.midiDeviceName = midiDeviceName;
+    }
+
+    public String getInHost() {
+        return inHost;
+    }
+
+    public void setInHost(String inHost) {
+        this.inHost = inHost;
+    }
+
+    public int getInPort() {
+        return inPort;
+    }
+
+    public void setInPort(int inPort) {
+        this.inPort = inPort;
     }
 }

@@ -68,14 +68,21 @@ public class RenameNode implements OSCNode {
     }
 
     @Override
-    public OSCMessage process(OSCMessage message) {
+    public void process(java.util.List<xyz.theforks.model.MessageRequest> requests) {
+        OSCMessage message = inputMessage(requests);
+        if (message == null) return;
+
         Object[] arguments = message.getArguments().toArray();
         String addr = message.getAddress();
         if (addr.matches(addressPattern)) {
-            addr = regexPattern.matcher(addr).replaceAll(replaceString);
-            return new OSCMessage(addr, Arrays.asList(arguments));
+            String newAddr = regexPattern.matcher(addr).replaceFirst(replaceString);
+            if (!newAddr.equals(addr)) {
+                OSCMessage renamedMessage = new OSCMessage(newAddr, Arrays.asList(arguments));
+                replaceMessage(requests, renamedMessage);
+            }
+            // Otherwise pass through unchanged
         }
-        return message;
+        // Pass through unchanged if doesn't match pattern
     }
 
 	@Override

@@ -67,15 +67,20 @@ public class OSCOutputService {
             return;
         }
 
-        // Apply node chain to message
-        OSCMessage processedMessage = nodeChain.processMessage(message);
-        if (processedMessage != null) {
-            sender.send(processedMessage);
+        // Apply node chain to message (no playback context in proxy mode)
+        java.util.List<xyz.theforks.model.MessageRequest> requests = nodeChain.processMessage(message);
 
-            // Send to monitor window if one is open
-            if (monitorWindow != null && monitorWindow.isOpen()) {
-                monitorWindow.addMessage(processedMessage);
+        for (xyz.theforks.model.MessageRequest req : requests) {
+            if (req.isImmediate()) {
+                // Send immediately (delays are ignored in proxy mode)
+                sender.send(req.getMessage());
+
+                // Send to monitor window if one is open
+                if (monitorWindow != null && monitorWindow.isOpen()) {
+                    monitorWindow.addMessage(req.getMessage());
+                }
             }
+            // Note: Delays are ignored in proxy mode (no playback context to schedule with)
         }
     }
 

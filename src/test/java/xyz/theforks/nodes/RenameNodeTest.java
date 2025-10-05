@@ -4,10 +4,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.regex.PatternSyntaxException;
 
 import com.illposed.osc.OSCMessage;
+import xyz.theforks.model.MessageRequest;
 
 class RenameNodeTest {
 
@@ -74,8 +77,12 @@ class RenameNodeTest {
         node.configure(new String[]{"/test/.*", "/test/(\\d+)", "/renamed/$1"});
 
         OSCMessage originalMessage = new OSCMessage("/test/123", Arrays.asList(1.0f, "hello"));
-        OSCMessage processedMessage = node.process(originalMessage);
+        List<MessageRequest> requests = new ArrayList<>();
+        requests.add(new MessageRequest(originalMessage));
+        node.process(requests);
 
+        assertFalse(requests.isEmpty());
+        OSCMessage processedMessage = requests.get(0).getMessage();
         assertEquals("/renamed/123", processedMessage.getAddress());
         assertEquals(originalMessage.getArguments(), processedMessage.getArguments());
     }
@@ -85,9 +92,13 @@ class RenameNodeTest {
         node.configure(new String[]{"/test/.*", "/test/(\\d+)", "/renamed/$1"});
 
         OSCMessage originalMessage = new OSCMessage("/other/123", Arrays.asList(1.0f, "hello"));
-        OSCMessage processedMessage = node.process(originalMessage);
+        List<MessageRequest> requests = new ArrayList<>();
+        requests.add(new MessageRequest(originalMessage));
+        node.process(requests);
 
         // Should return the same message unchanged
+        assertFalse(requests.isEmpty());
+        OSCMessage processedMessage = requests.get(0).getMessage();
         assertEquals(originalMessage.getAddress(), processedMessage.getAddress());
         assertEquals(originalMessage.getArguments(), processedMessage.getArguments());
     }
@@ -98,11 +109,19 @@ class RenameNodeTest {
         node.configure(new String[]{"/lx/modulation/Mag[123]/mag", "/lx/modulation/Mag(\\d)/mag", "/lx/modulation/Angles/angle$1"});
 
         OSCMessage message1 = new OSCMessage("/lx/modulation/Mag1/mag", Arrays.asList(0.5f));
-        OSCMessage processed1 = node.process(message1);
+        List<MessageRequest> requests1 = new ArrayList<>();
+        requests1.add(new MessageRequest(message1));
+        node.process(requests1);
+        assertFalse(requests1.isEmpty());
+        OSCMessage processed1 = requests1.get(0).getMessage();
         assertEquals("/lx/modulation/Angles/angle1", processed1.getAddress());
 
         OSCMessage message2 = new OSCMessage("/lx/modulation/Mag3/mag", Arrays.asList(0.8f));
-        OSCMessage processed2 = node.process(message2);
+        List<MessageRequest> requests2 = new ArrayList<>();
+        requests2.add(new MessageRequest(message2));
+        node.process(requests2);
+        assertFalse(requests2.isEmpty());
+        OSCMessage processed2 = requests2.get(0).getMessage();
         assertEquals("/lx/modulation/Angles/angle3", processed2.getAddress());
     }
 
@@ -112,8 +131,12 @@ class RenameNodeTest {
         node.configure(new String[]{"/old.*", "/old", "/new"});
 
         OSCMessage originalMessage = new OSCMessage("/old/path", Arrays.asList(42));
-        OSCMessage processedMessage = node.process(originalMessage);
+        List<MessageRequest> requests = new ArrayList<>();
+        requests.add(new MessageRequest(originalMessage));
+        node.process(requests);
 
+        assertFalse(requests.isEmpty());
+        OSCMessage processedMessage = requests.get(0).getMessage();
         assertEquals("/new/path", processedMessage.getAddress());
         assertEquals(originalMessage.getArguments(), processedMessage.getArguments());
     }
@@ -124,8 +147,12 @@ class RenameNodeTest {
 
         Object[] originalArgs = {1.0f, 2, "string", true, 3.14};
         OSCMessage originalMessage = new OSCMessage("/test/path", Arrays.asList(originalArgs));
-        OSCMessage processedMessage = node.process(originalMessage);
+        List<MessageRequest> requests = new ArrayList<>();
+        requests.add(new MessageRequest(originalMessage));
+        node.process(requests);
 
+        assertFalse(requests.isEmpty());
+        OSCMessage processedMessage = requests.get(0).getMessage();
         assertEquals("/renamed/path", processedMessage.getAddress());
         assertEquals(Arrays.asList(originalArgs), processedMessage.getArguments());
     }
@@ -136,8 +163,12 @@ class RenameNodeTest {
         node.configure(new String[]{".*", "/(\\w+)/(\\w+)/(\\w+)", "/$3-$2-$1"});
 
         OSCMessage originalMessage = new OSCMessage("/first/second/third", Arrays.asList(1.0f));
-        OSCMessage processedMessage = node.process(originalMessage);
+        List<MessageRequest> requests = new ArrayList<>();
+        requests.add(new MessageRequest(originalMessage));
+        node.process(requests);
 
+        assertFalse(requests.isEmpty());
+        OSCMessage processedMessage = requests.get(0).getMessage();
         assertEquals("/third-second-first", processedMessage.getAddress());
     }
 }

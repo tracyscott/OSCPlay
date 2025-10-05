@@ -53,14 +53,16 @@ public class PassNode implements OSCNode {
     }
 
     @Override
-    public OSCMessage process(OSCMessage message) {
+    public void process(java.util.List<xyz.theforks.model.MessageRequest> requests) {
+        OSCMessage message = inputMessage(requests);
+        if (message == null) return;
+
         String addr = message.getAddress();
-        if (addr.matches(addressPattern)) {
-            // Pass the message through
-            return message;
+        if (!addr.matches(addressPattern)) {
+            // Drop messages that don't match
+            dropMessage(requests);
         }
-        // Drop the message by returning null
-        return null;
+        // Otherwise pass through unchanged (do nothing)
     }
 
     @Override
