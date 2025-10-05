@@ -85,7 +85,7 @@ public class NodeChain {
                 // because a node might need to expand some requests but not others
                 List<MessageRequest> nextRequests = new ArrayList<>();
 
-                System.out.println("Processing node: " + node.label() + " with " + requests.size() + " messages");
+                // System.out.println("Processing node: " + node.label() + " with " + requests.size() + " messages");
 
                 for (MessageRequest req : requests) {
                     String address = req.getMessage().getAddress();

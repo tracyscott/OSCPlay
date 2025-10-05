@@ -36,7 +36,7 @@ public class ProxyDelayProcessor {
 
         running.set(true);
         processorThread = new Thread(() -> {
-            System.out.println("ProxyDelayProcessor: Started");
+            // System.out.println("ProxyDelayProcessor: Started");
 
             while (running.get()) {
                 try {
@@ -70,7 +70,7 @@ public class ProxyDelayProcessor {
                 }
             }
 
-            System.out.println("ProxyDelayProcessor: Stopped");
+            //System.out.println("ProxyDelayProcessor: Stopped");
         });
 
         processorThread.setDaemon(true);
@@ -128,9 +128,9 @@ public class ProxyDelayProcessor {
             messageQueue.offer(scheduled);
         }
 
-        System.out.println("ProxyDelayProcessor: Scheduled delayed message: " + record.getAddress() +
-                         " delay=" + request.getDelayMs() + "ms output=" + targetOutput +
-                         " queueSize=" + messageQueue.size());
+        // System.out.println("ProxyDelayProcessor: Scheduled delayed message: " + record.getAddress() +
+        //                  " delay=" + request.getDelayMs() + "ms output=" + targetOutput +
+        //                  " queueSize=" + messageQueue.size());
     }
 
     /**
@@ -176,24 +176,24 @@ public class ProxyDelayProcessor {
      */
     private void sendToOutput(OSCOutputService output, OSCMessage message, String outputId, long previousDelay) {
         try {
-            System.out.println("ProxyDelayProcessor: sendToOutput: " + message.getAddress() +
-                             " previousDelay=" + previousDelay);
+            // System.out.println("ProxyDelayProcessor: sendToOutput: " + message.getAddress() +
+            //                  " previousDelay=" + previousDelay);
 
             // Process through output's node chain with previousDelay to prevent re-delaying
             List<MessageRequest> requests = output.getNodeChain().processMessage(message, null, previousDelay);
 
-            System.out.println("ProxyDelayProcessor: After node chain, got " + requests.size() + " requests");
+            // System.out.println("ProxyDelayProcessor: After node chain, got " + requests.size() + " requests");
             for (MessageRequest req : requests) {
-                System.out.println("  Request: delayMs=" + req.getDelayMs() +
-                                 " previousDelay=" + req.getPreviousDelay() +
-                                 " isImmediate=" + req.isImmediate());
+                // System.out.println("  Request: delayMs=" + req.getDelayMs() +
+                //                  " previousDelay=" + req.getPreviousDelay() +
+                //                  " isImmediate=" + req.isImmediate());
                 if (req.isImmediate()) {
                     // Send immediately
-                    System.out.println("  -> Sending immediately to " + outputId);
+                    //System.out.println("  -> Sending immediately to " + outputId);
                     output.send(req.getMessage(), true, true);  // bypass enabled check AND node chain
                 } else {
                     // Schedule another delayed message (e.g., if DelayNode adds more delay)
-                    System.out.println("  -> Scheduling delayed message");
+                    //System.out.println("  -> Scheduling delayed message");
                     scheduleMessage(req, outputId);
                 }
             }

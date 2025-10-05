@@ -81,18 +81,18 @@ public class OSCOutputService {
      */
     public void send(OSCMessage message, boolean bypassEnabledCheck, boolean bypassNodeChain) throws IOException, OSCSerializeException {
         // If bypassing enabled check and sender is not initialized, start the output
-        System.out.println("Output " + id + " trying to send message: " + message);
+        // System.out.println("Output " + id + " trying to send message: " + message);
         if (bypassEnabledCheck && sender == null) {
             start();
         }
 
-        System.out.println("Checking sender and message for output " + id);
+        // System.out.println("Checking sender and message for output " + id);
         if (sender == null || message == null) {
             return;
         }
 
         // Only check enabled flag if not bypassing
-        System.out.println("Checking enabled and bypass state for output " + id);
+        // System.out.println("Checking enabled and bypass state for output " + id);
         if (!bypassEnabledCheck && !enabled) {
             return;
         }

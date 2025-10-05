@@ -75,11 +75,11 @@ public class DelayNode implements OSCNode {
         if (addr.matches(addressPattern)) {
             // Check if this message was previously delayed (to prevent infinite loop)
             if (currentRequest.wasPreviouslyDelayed()) {
-                System.out.println("DelayNode: Message " + addr + " was previously delayed (" +
-                    currentRequest.getPreviousDelay() + "ms), passing through without re-delaying");
+                //System.out.println("DelayNode: Message " + addr + " was previously delayed (" +
+                //    currentRequest.getPreviousDelay() + "ms), passing through without re-delaying");
                 // Pass through unchanged - don't apply delay again
             } else {
-                System.out.println("DelayNode: Applying " + delayMs + "ms delay to " + addr);
+                // System.out.println("DelayNode: Applying " + delayMs + "ms delay to " + addr);
                 // Apply the delay
                 MessageRequest delayedRequest = new MessageRequest(message, delayMs);
                 replaceMessage(requests, delayedRequest);

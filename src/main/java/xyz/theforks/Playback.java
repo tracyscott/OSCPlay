@@ -79,8 +79,8 @@ public class Playback implements PlaybackContext {
             RecordingSession session = new RecordingSession(sessionName);
             session.saveSettings(settings);
 
-            System.out.println("Associated audio file " + audioFile.getName()
-                    + " with session " + sessionName);
+            // System.out.println("Associated audio file " + audioFile.getName()
+            //         + " with session " + sessionName);
         } catch (Exception e) {
             System.err.println("Error associating audio file: " + e.getMessage());
             e.printStackTrace();
@@ -148,8 +148,8 @@ public class Playback implements PlaybackContext {
             messageQueue.offer(scheduled);
         }
 
-        System.out.println("Scheduled delayed message: " + record.getAddress() +
-                         " delay=" + request.getDelayMs() + "ms output=" + targetOutput);
+       // System.out.println("Scheduled delayed message: " + record.getAddress() +
+       //                  " delay=" + request.getDelayMs() + "ms output=" + targetOutput);
     }
 
     @Override
@@ -174,8 +174,8 @@ public class Playback implements PlaybackContext {
                 messageQueue.offer(new ScheduledMessage(msg, msg.getTimestamp(), null, 0));
             }
 
-            System.out.println("Playing session: " + sessionName
-                    + " (" + messageQueue.size() + " messages)");
+            // System.out.println("Playing session: " + sessionName
+            //         + " (" + messageQueue.size() + " messages)");
 
             // Reset control flags
             stopPlayback.set(false);
@@ -216,7 +216,7 @@ public class Playback implements PlaybackContext {
                                         });
                                         mediaPlayer.play();
                                     });
-                                    System.out.println("Started audio playback: " + audioFileName);
+                                    //System.out.println("Started audio playback: " + audioFileName);
                                 } else {
                                     System.err.println("Audio file not found: " + audioFile.getAbsolutePath());
                                     mediaReady = true;
@@ -225,7 +225,7 @@ public class Playback implements PlaybackContext {
                                 mediaReady = true;
                             }
 
-                            System.out.println("Waiting for media to be ready");
+                            // System.out.println("Waiting for media to be ready");
                             while (!mediaReady) {
                                 try {
                                     Thread.sleep(5);
@@ -236,7 +236,7 @@ public class Playback implements PlaybackContext {
                             sessionStartTime = scheduled.getAbsoluteTimestamp();
                             playbackStartTime = System.currentTimeMillis();
                             firstMessage = false;
-                            System.out.println("Playing first message");
+                            //System.out.println("Playing first message");
                         }
 
                         // Update progress
@@ -295,7 +295,7 @@ public class Playback implements PlaybackContext {
                             playbackProgress.set(1.0);
                         }
                     });
-                    System.out.println("Finished playing session: " + sessionName);
+                    //System.out.println("Finished playing session: " + sessionName);
                 }
             });
 
@@ -316,23 +316,23 @@ public class Playback implements PlaybackContext {
      */
     private void sendToOutput(OSCOutputService output, OSCMessage message, String outputId, long previousDelay) {
         try {
-            System.out.println("sendToOutput: " + message.getAddress() + " previousDelay=" + previousDelay);
+            // System.out.println("sendToOutput: " + message.getAddress() + " previousDelay=" + previousDelay);
 
             // Process through output's node chain with playback context and previousDelay
             List<MessageRequest> requests = output.getNodeChain().processMessage(message, this, previousDelay);
 
-            System.out.println("sendToOutput: After node chain, got " + requests.size() + " requests");
+            // System.out.println("sendToOutput: After node chain, got " + requests.size() + " requests");
             for (MessageRequest req : requests) {
-                System.out.println("  Request: delayMs=" + req.getDelayMs() +
-                                 " previousDelay=" + req.getPreviousDelay() +
-                                 " isImmediate=" + req.isImmediate());
+                // System.out.println("  Request: delayMs=" + req.getDelayMs() +
+                //                 " previousDelay=" + req.getPreviousDelay() +
+                //                 " isImmediate=" + req.isImmediate());
                 if (req.isImmediate()) {
                     // Send immediately
-                    System.out.println("  -> Sending immediately to " + outputId);
+                    // System.out.println("  -> Sending immediately to " + outputId);
                     output.send(req.getMessage(), true, true);  // bypass enabled check AND node chain
                 } else {
                     // Schedule delayed message
-                    System.out.println("  -> Scheduling delayed message");
+                    // System.out.println("  -> Scheduling delayed message");
                     scheduleDelayedMessage(req, outputId);
                 }
             }
