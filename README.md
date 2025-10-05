@@ -4,6 +4,9 @@
 
 OSCPlay is a Java-based OSC (Open Sound Control) proxy server that captures, records, and replays OSC messages. Perfect for installations where you need to recreate Ableton Live, TouchOSC, or other OSC-based automation without the original software.
 
+![Screenshot](assets/oscplay_screenshot.png)
+
+
 ## Features
 
 - **OSC Proxy Server**: Captures OSC messages in real-time and forwards them to destinations
