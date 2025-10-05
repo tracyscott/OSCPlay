@@ -2,12 +2,17 @@ package xyz.theforks;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.Properties;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
-import javafx.scene.paint.Color;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
@@ -16,8 +21,8 @@ import javafx.scene.control.Label;
 import javafx.scene.control.Menu;
 import javafx.scene.control.MenuBar;
 import javafx.scene.control.MenuItem;
-import javafx.scene.control.SeparatorMenuItem;
 import javafx.scene.control.ProgressBar;
+import javafx.scene.control.SeparatorMenuItem;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TextArea;
@@ -30,6 +35,7 @@ import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
+import javafx.scene.paint.Color;
 import javafx.stage.FileChooser;
 import javafx.stage.FileChooser.ExtensionFilter;
 import javafx.stage.Stage;
@@ -45,18 +51,12 @@ import xyz.theforks.service.OSCInputService;
 import xyz.theforks.service.OSCOutputService;
 import xyz.theforks.service.OSCProxyService;
 import xyz.theforks.service.ProjectManager;
+import xyz.theforks.ui.MonitorWindow;
 import xyz.theforks.ui.ProjectSplashScreen;
 import xyz.theforks.ui.RecordingEditorUI;
 import xyz.theforks.ui.SamplerPadUI;
 import xyz.theforks.ui.Theme;
-import xyz.theforks.ui.MonitorWindow;
 import xyz.theforks.util.DataDirectory;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
-import java.io.InputStream;
-import java.nio.file.Path;
-import java.util.List;
-import java.util.Properties;
 
 public class OSCProxyApp extends Application {
 
@@ -446,6 +446,7 @@ public class OSCProxyApp extends Application {
         primaryStage.setResizable(true);
         primaryStage.setMinWidth(500);
         primaryStage.setWidth(1024);
+        primaryStage.setHeight(900);
         // Set up event handlers
         setupEventHandlers();
 
