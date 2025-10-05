@@ -117,6 +117,7 @@ public class IntToBangNode implements OSCNode {
         grid.add(saveButton, 1, 2);
 
         Scene scene = new Scene(grid);
+        xyz.theforks.ui.Theme.applyDark(scene);
         stage.setScene(scene);
         stage.show();
     }

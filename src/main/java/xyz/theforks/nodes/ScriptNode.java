@@ -169,10 +169,10 @@ public class ScriptNode implements OSCNode {
         grid.add(pathLabel, 0, 0);
         grid.add(pathField, 1, 0);
 
-        // Script content viewer
+        // Script content editor
         Label contentLabel = new Label("Script Content:");
         TextArea contentArea = new TextArea();
-        contentArea.setEditable(false);
+        contentArea.setEditable(true);
         contentArea.setPrefRowCount(20);
         contentArea.setPrefWidth(600);
         GridPane.setHgrow(contentArea, Priority.ALWAYS);
@@ -193,11 +193,11 @@ public class ScriptNode implements OSCNode {
         buttonGrid.setHgap(10);
 
         // Reload button
-        Button reloadButton = new Button("Reload");
+        Button reloadButton = new Button("Reload from File");
         reloadButton.setOnAction(e -> {
             if (loadScript()) {
                 loadScriptContent(contentArea);
-                statusLabel.setText("Script reloaded successfully");
+                statusLabel.setText("Script reloaded successfully from file");
                 statusLabel.setStyle("-fx-text-fill: green;");
             } else {
                 statusLabel.setText("Error loading script: " + lastError);
@@ -205,6 +205,26 @@ public class ScriptNode implements OSCNode {
             }
         });
         buttonGrid.add(reloadButton, 0, 0);
+
+        // Save Script button
+        Button saveScriptButton = new Button("Save Script");
+        saveScriptButton.setOnAction(e -> {
+            try {
+                Path path = resolveScriptPath();
+                Files.writeString(path, contentArea.getText());
+                if (loadScript()) {
+                    statusLabel.setText("Script saved successfully to file");
+                    statusLabel.setStyle("-fx-text-fill: green;");
+                } else {
+                    statusLabel.setText("Script saved but reload failed: " + lastError);
+                    statusLabel.setStyle("-fx-text-fill: orange;");
+                }
+            } catch (IOException ex) {
+                statusLabel.setText("Error saving script: " + ex.getMessage());
+                statusLabel.setStyle("-fx-text-fill: red;");
+            }
+        });
+        buttonGrid.add(saveScriptButton, 1, 0);
 
         // Test button
         Button testButton = new Button("Test");
@@ -237,31 +257,32 @@ public class ScriptNode implements OSCNode {
                 statusLabel.setStyle("-fx-text-fill: red;");
             }
         });
-        buttonGrid.add(testButton, 1, 0);
+        buttonGrid.add(testButton, 2, 0);
 
-        // Save button
-        Button saveButton = new Button("Save Path");
-        saveButton.setOnAction(e -> {
+        // Update Path button
+        Button updatePathButton = new Button("Update Path");
+        updatePathButton.setOnAction(e -> {
             scriptPath = pathField.getText();
             if (loadScript()) {
                 loadScriptContent(contentArea);
-                statusLabel.setText("Script path saved and loaded");
+                statusLabel.setText("Script path updated and loaded");
                 statusLabel.setStyle("-fx-text-fill: green;");
             } else {
                 statusLabel.setText("Error loading script: " + lastError);
                 statusLabel.setStyle("-fx-text-fill: red;");
             }
         });
-        buttonGrid.add(saveButton, 2, 0);
+        buttonGrid.add(updatePathButton, 3, 0);
 
         // Close button
         Button closeButton = new Button("Close");
         closeButton.setOnAction(e -> stage.close());
-        buttonGrid.add(closeButton, 3, 0);
+        buttonGrid.add(closeButton, 4, 0);
 
         grid.add(buttonGrid, 0, 4, 2, 1);
 
         Scene scene = new Scene(grid, 700, 500);
+        xyz.theforks.ui.Theme.applyDark(scene);
         stage.setScene(scene);
         stage.show();
     }

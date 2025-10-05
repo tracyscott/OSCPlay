@@ -150,6 +150,7 @@ public class RenameNode implements OSCNode {
 	    grid.add(saveButton, 1, 3);
 
 	    Scene scene = new Scene(grid);
+	    xyz.theforks.ui.Theme.applyDark(scene);
 	    stage.setScene(scene);
 	    stage.show();
 	}

@@ -119,6 +119,7 @@ public class SplitterNode implements OSCNode {
         grid.add(closeButton, 0, 1);
 
         Scene scene = new Scene(grid);
+        xyz.theforks.ui.Theme.applyDark(scene);
         stage.setScene(scene);
         stage.show();
     }

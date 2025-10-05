@@ -3,7 +3,6 @@ package xyz.theforks.nodes;
 public class NodeRegistry {
     private static final OSCNode[] nodes = {
         new PitchShiftNode(),
-        new InterlaceMagNode(),
         new RenameNode(),
         new MovingAvgNode(),
         new IntToBangNode(),

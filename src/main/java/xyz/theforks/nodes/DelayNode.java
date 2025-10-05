@@ -139,6 +139,7 @@ public class DelayNode implements OSCNode {
         grid.add(cancelButton, 0, 2);
 
         Scene scene = new Scene(grid);
+        xyz.theforks.ui.Theme.applyDark(scene);
         stage.setScene(scene);
         stage.show();
     }
