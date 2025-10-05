@@ -124,9 +124,9 @@ public class RenameNode implements OSCNode {
 	        try {
 	            Pattern pattern = Pattern.compile(regexField.getText());
 	            String result = pattern.matcher(testField.getText())
-	                                 .replaceAll(replaceField.getText());
+	                                 .replaceFirst(replaceField.getText());
 	            resultLabel.setText("Result: " + result);
-	            resultLabel.setTextFill(Color.BLACK);
+	            resultLabel.setTextFill(Color.LIGHTGREEN);
 	        } catch (PatternSyntaxException ex) {
 	            resultLabel.setText("Invalid regex pattern: " + ex.getMessage());
 	            resultLabel.setTextFill(Color.RED);
