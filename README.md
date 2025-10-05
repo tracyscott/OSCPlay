@@ -55,7 +55,7 @@ java -jar target/osc-play-2.0.0-shaded.jar
 
 ## License
 
-[Add license information]
+MIT License
 
 ## Version
 
