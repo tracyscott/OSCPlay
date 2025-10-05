@@ -432,42 +432,97 @@ public class NodeChainManager {
 
     // Methods moved from OSCProxyApp
     private void showAddNodeDialog() {
-        ChoiceDialog<String> dialog = new ChoiceDialog<>();
-        dialog.setTitle("Add Node");
-        dialog.setHeaderText("Select node type:");
-        dialog.getItems().addAll(Arrays.asList(NodeRegistry.getNodeLabels()));
+        Stage stage = new Stage();
+        stage.setTitle("Add Node");
 
-        // Apply dark theme when the dialog is shown
-        dialog.setOnShown(e -> Theme.applyDark(dialog.getDialogPane().getScene()));
+        GridPane grid = new GridPane();
+        grid.setPadding(new Insets(15));
+        grid.setHgap(15);
+        grid.setVgap(15);
 
-        Optional<String> result = dialog.showAndWait();
-        result.ifPresent(nodeLabel -> {
-            for (OSCNode node : NodeRegistry.getNodes()) {
-                if (node.label().equals(nodeLabel)) {
+        // Get all available nodes
+        OSCNode[] availableNodes = NodeRegistry.getNodes();
+
+        // Calculate grid dimensions (3 columns)
+        int columns = 3;
+        int rows = (int) Math.ceil((double) availableNodes.length / columns);
+
+        // Create a grid of node buttons
+        int index = 0;
+        for (int row = 0; row < rows; row++) {
+            for (int col = 0; col < columns && index < availableNodes.length; col++) {
+                OSCNode node = availableNodes[index];
+
+                // Create a container for this node option
+                javafx.scene.layout.VBox nodeBox = new javafx.scene.layout.VBox(5);
+                nodeBox.setAlignment(Pos.CENTER);
+                nodeBox.setPadding(new Insets(10));
+                nodeBox.setStyle("-fx-border-color: #555; -fx-border-width: 1; -fx-background-color: #2b2b2b;");
+                nodeBox.setPrefWidth(200);
+                nodeBox.setMinHeight(100);
+
+                // Node label
+                Label nameLabel = new Label(node.label());
+                nameLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 14px;");
+
+                // Help text
+                Label helpLabel = new Label(node.getHelp());
+                helpLabel.setWrapText(true);
+                helpLabel.setMaxWidth(180);
+                helpLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #aaa;");
+
+                nodeBox.getChildren().addAll(nameLabel, helpLabel);
+
+                // Make the entire box clickable
+                final OSCNode selectedNode = node;
+                nodeBox.setOnMouseClicked(e -> {
                     try {
                         // Create new instance of same node type
-                        OSCNode newNode = node.getClass().getDeclaredConstructor().newInstance();
+                        OSCNode newNode = selectedNode.getClass().getDeclaredConstructor().newInstance();
 
-                        // Show argument configuration dialog if node has arguments
-                        if (newNode.getNumArgs() > 0) {
-                            if (showNodeConfigDialog(newNode)) {
-                                activeNodes.add(newNode);
-                                rebuildNodeChain();
-                                notifyNodeChainChanged();
+                        stage.close();
+
+                        // Use Platform.runLater to ensure the first dialog is fully closed
+                        // before opening the second dialog
+                        javafx.application.Platform.runLater(() -> {
+                            try {
+                                // Show argument configuration dialog if node has arguments
+                                if (newNode.getNumArgs() > 0) {
+                                    if (showNodeConfigDialog(newNode)) {
+                                        activeNodes.add(newNode);
+                                        rebuildNodeChain();
+                                        notifyNodeChainChanged();
+                                    }
+                                } else {
+                                    // No arguments needed, add directly
+                                    activeNodes.add(newNode);
+                                    rebuildNodeChain();
+                                    notifyNodeChainChanged();
+                                }
+                            } catch (Exception ex) {
+                                showError("Error", "Could not create node: " + ex.getMessage());
                             }
-                        } else {
-                            // No arguments needed, add directly
-                            activeNodes.add(newNode);
-                            rebuildNodeChain();
-                            notifyNodeChainChanged();
-                        }
+                        });
                     } catch (Exception ex) {
                         showError("Error", "Could not create node: " + ex.getMessage());
                     }
-                    break;
-                }
+                });
+
+                // Add hover effect
+                nodeBox.setOnMouseEntered(e ->
+                    nodeBox.setStyle("-fx-border-color: #888; -fx-border-width: 1; -fx-background-color: #3b3b3b; -fx-cursor: hand;"));
+                nodeBox.setOnMouseExited(e ->
+                    nodeBox.setStyle("-fx-border-color: #555; -fx-border-width: 1; -fx-background-color: #2b2b2b;"));
+
+                grid.add(nodeBox, col, row);
+                index++;
             }
-        });
+        }
+
+        Scene scene = new Scene(grid);
+        Theme.applyDark(scene);
+        stage.setScene(scene);
+        stage.showAndWait();
     }
 
     /**
@@ -498,6 +553,7 @@ public class NodeChainManager {
             field.setPrefWidth(400);
             argFields[i] = field;
             grid.add(field, 0, i * 2 + 1, 2, 1);
+            System.out.println("Arg " + i + " name: " + argNames[i]);
         }
 
         // Button row

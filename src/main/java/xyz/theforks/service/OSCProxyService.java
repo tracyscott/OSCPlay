@@ -123,6 +123,31 @@ public class OSCProxyService {
         return false;
     }
 
+    /**
+     * Clear all outputs except default.
+     * Used when switching projects to reset the output configuration.
+     */
+    public void clearAllOutputs() {
+        // Stop and remove all non-default outputs
+        List<String> idsToRemove = new ArrayList<>();
+        for (String id : outputs.keySet()) {
+            if (!"default".equals(id)) {
+                idsToRemove.add(id);
+            }
+        }
+        for (String id : idsToRemove) {
+            OSCOutputService output = outputs.remove(id);
+            if (output != null) {
+                output.stop();
+            }
+        }
+        // Clear the default output's node chain if it exists
+        OSCOutputService defaultOutput = outputs.get("default");
+        if (defaultOutput != null) {
+            defaultOutput.getNodeChain().getNodes().clear();
+        }
+    }
+
     public IntegerProperty messageCountProperty() {
         return messageCount;
     }
@@ -461,5 +486,16 @@ public class OSCProxyService {
         if (output != null) {
             output.getNodeChain().setNodes(nodes);
         }
+    }
+
+    /**
+     * Reset message counters to zero.
+     * Useful when loading a new project or clearing state.
+     */
+    public void resetMessageCounters() {
+        Platform.runLater(() -> {
+            messageCount.set(0);
+            totalMessageCount.set(0);
+        });
     }
 }

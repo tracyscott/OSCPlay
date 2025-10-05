@@ -110,6 +110,8 @@ public class OSCProxyApp extends Application {
     private NodeChainManager nodeChainManager;
     private ProjectManager projectManager;
     private Stage primaryStage;
+    private SamplerPadUI samplerPadUI;
+    private RecordingEditorUI recordingEditorUI;
 
     public static void main(String[] args) {
         // Parse command line arguments
@@ -389,14 +391,14 @@ public class OSCProxyApp extends Application {
         Tab playbackTab = new Tab("Playback", playbackSection);
 
         // Create Sampler tab content
-        SamplerPadUI samplerPadUI = new SamplerPadUI(proxyService, playback, logArea, projectManager);
+        samplerPadUI = new SamplerPadUI(proxyService, playback, logArea, projectManager);
         // Connect sampler pad UI to proxy service for OSC command handling
         proxyService.setSamplerPadUI(samplerPadUI);
         Tab samplerTab = new Tab("Sampler", samplerPadUI);
 
         // Create Edit tab content
-        RecordingEditorUI editorUI = new RecordingEditorUI(proxyService, logArea, this::updateSessionsList);
-        Tab editTab = new Tab("Edit", editorUI);
+        recordingEditorUI = new RecordingEditorUI(proxyService, logArea, this::updateSessionsList);
+        Tab editTab = new Tab("Edit", recordingEditorUI);
 
         // Add tabs to TabPane in order: Record, Playback, Sampler, Edit
         tabPane.getTabs().addAll(recordTab, playbackTab, samplerTab, editTab);
@@ -430,7 +432,7 @@ public class OSCProxyApp extends Application {
 
         primaryStage.setResizable(true);
         primaryStage.setMinWidth(500);
-        primaryStage.setWidth(800);
+        primaryStage.setWidth(1024);
         // Set up event handlers
         setupEventHandlers();
 
@@ -568,20 +570,49 @@ public class OSCProxyApp extends Application {
      * Handle New Project menu action.
      */
     private void handleNewProject() {
+        log("handleNewProject: Menu item clicked");
         TextInputDialog dialog = new TextInputDialog("Untitled");
         dialog.setTitle("New Project");
         dialog.setHeaderText("Create a new OSCPlay project");
         dialog.setContentText("Project name:");
 
+        log("handleNewProject: Showing dialog...");
         dialog.showAndWait().ifPresent(name -> {
+            log("handleNewProject: Dialog returned with name: " + name);
             try {
+                log("Starting New Project creation: " + name);
+
+                // Stop the proxy before switching projects
+                if (proxyService != null) {
+                    proxyService.stopProxy();
+                    log("Proxy stopped");
+                }
+
                 projectManager.createProject(name);
+                log("Project created in ProjectManager");
+
+                // Update recordings directory for the new project
+                if (projectManager.hasOpenProject()) {
+                    RecordingSession.setRecordingsDirectory(projectManager.getRecordingsDir());
+                    log("Recordings directory set: " + projectManager.getRecordingsDir());
+                }
+
                 log("Created new project: " + name);
+
                 // Reload UI with new project settings
+                log("Calling loadProjectConfiguration()...");
                 loadProjectConfiguration();
+                log("loadProjectConfiguration() completed");
+
                 updateWindowTitle(primaryStage);
+
+                // Restart proxy with new settings
+                log("Restarting proxy...");
+                restartProxyAfterProjectChange();
+                log("Proxy restarted");
             } catch (IOException ex) {
                 showError("Error creating project", ex.getMessage());
+                log("ERROR creating project: " + ex.getMessage());
             }
         });
     }
@@ -600,11 +631,26 @@ public class OSCProxyApp extends Application {
         File selectedFile = fileChooser.showOpenDialog(stage);
         if (selectedFile != null) {
             try {
+                // Stop the proxy before switching projects
+                if (proxyService != null) {
+                    proxyService.stopProxy();
+                }
+
                 projectManager.openProject(selectedFile);
+
+                // Update recordings directory for the new project
+                if (projectManager.hasOpenProject()) {
+                    RecordingSession.setRecordingsDirectory(projectManager.getRecordingsDir());
+                }
+
                 log("Opened project: " + selectedFile.getName());
+
                 // Reload UI with project settings
                 loadProjectConfiguration();
                 updateWindowTitle(primaryStage);
+
+                // Restart proxy with new settings
+                restartProxyAfterProjectChange();
             } catch (IOException ex) {
                 showError("Error opening project", ex.getMessage());
             }
@@ -658,35 +704,114 @@ public class OSCProxyApp extends Application {
             }
 
             // Clear all outputs first to remove any previously loaded data
-            proxyService.getOutputs().clear();
+            log("initializeOutputsFromProject: Clearing all outputs...");
+            proxyService.clearAllOutputs();
+            log("initializeOutputsFromProject: Outputs cleared. Remaining outputs: " + proxyService.getOutputs().size());
 
-            // If project has no outputs configured, ensure default output exists with empty node chain
-            if (project.getOutputs().isEmpty()) {
-                OSCOutputService defaultOutput = new OSCOutputService("default");
-                defaultOutput.setOutHost("127.0.0.1");
-                defaultOutput.setOutPort(3030);
-                defaultOutput.setEnabled(true);
-                proxyService.addOutput(defaultOutput);
-            } else {
-                // Load outputs from project configuration
-                for (OutputConfig outputConfig : project.getOutputs()) {
-                    if ("default".equals(outputConfig.getId())) {
-                        OSCOutputService defaultOutput = new OSCOutputService("default");
+            // Load outputs from project configuration
+            log("initializeOutputsFromProject: Project has " + project.getOutputs().size() + " outputs configured");
+            for (OutputConfig outputConfig : project.getOutputs()) {
+                log("initializeOutputsFromProject: Loading output: " + outputConfig.getId());
+                if ("default".equals(outputConfig.getId())) {
+                    // Update the existing default output
+                    OSCOutputService defaultOutput = proxyService.getOutput("default");
+                    if (defaultOutput != null) {
                         defaultOutput.setOutHost(outputConfig.getHost());
                         defaultOutput.setOutPort(outputConfig.getPort());
                         defaultOutput.setEnabled(outputConfig.isEnabled());
-                        proxyService.addOutput(defaultOutput);
                         loadNodeChainForOutput(defaultOutput, outputConfig.getNodeChain());
-                    } else {
-                        OSCOutputService output = new OSCOutputService(outputConfig.getId());
-                        output.setOutHost(outputConfig.getHost());
-                        output.setOutPort(outputConfig.getPort());
-                        output.setEnabled(outputConfig.isEnabled());
-                        proxyService.addOutput(output);
-                        loadNodeChainForOutput(output, outputConfig.getNodeChain());
                     }
+                } else {
+                    OSCOutputService output = new OSCOutputService(outputConfig.getId());
+                    output.setOutHost(outputConfig.getHost());
+                    output.setOutPort(outputConfig.getPort());
+                    output.setEnabled(outputConfig.isEnabled());
+                    proxyService.addOutput(output);
+                    loadNodeChainForOutput(output, outputConfig.getNodeChain());
                 }
             }
+            log("initializeOutputsFromProject: Final output count: " + proxyService.getOutputs().size());
+        }
+    }
+
+    /**
+     * Clear UI state when loading a new project.
+     */
+    private void clearUIState() {
+        // Reset proxy service message counters
+        if (proxyService != null) {
+            proxyService.resetMessageCounters();
+        }
+
+        // Clear message counters (will be updated by property bindings)
+        if (inMessageCountLabel != null) {
+            inMessageCountLabel.setText("0");
+        }
+        if (messageCountLabel != null) {
+            messageCountLabel.setText("Messages: 0");
+        }
+
+        // Reset recording state
+        isRecording = false;
+        if (recordButton != null) {
+            recordButton.setText("Start Recording");
+        }
+
+        // Clear playback state
+        if (playbackProgress != null) {
+            playbackProgress.setProgress(0);
+        }
+        if (playbackStatusLabel != null) {
+            playbackStatusLabel.setText("Ready");
+        }
+        if (audioFileLabel != null) {
+            audioFileLabel.setText("No Audio");
+        }
+
+        // Clear log area
+        if (logArea != null) {
+            logArea.clear();
+        }
+
+        // Clear status bar
+        if (statusBar != null) {
+            statusBar.setText("");
+        }
+
+        // Reset playback output selector
+        if (playbackOutputComboBox != null) {
+            playbackOutputComboBox.setValue("Proxy");
+        }
+
+        // Clear session selection
+        if (sessionComboBox != null) {
+            sessionComboBox.getSelectionModel().clearSelection();
+        }
+
+        // Reset selected output to default
+        selectedOutputId = "default";
+
+        // Clear node chain for default output
+        OSCOutputService defaultOutput = proxyService.getOutput("default");
+        if (defaultOutput != null) {
+            defaultOutput.getNodeChain().clearNodes();
+        }
+
+        // Reset sampler bank output routes to "Proxy"
+        if (samplerPadUI != null) {
+            for (int bank = 0; bank < 4; bank++) {
+                ComboBox<String> routeCombo = samplerPadUI.getBankOutputRoute(bank);
+                if (routeCombo != null) {
+                    routeCombo.setValue("Proxy");
+                }
+            }
+            // Clear all sampler pads
+            samplerPadUI.clearAllPads();
+        }
+
+        // Reset recording editor to "New" with empty table
+        if (recordingEditorUI != null) {
+            recordingEditorUI.resetToNew();
         }
     }
 
@@ -695,12 +820,32 @@ public class OSCProxyApp extends Application {
      * Called when switching projects after UI has been created.
      */
     private void loadProjectConfiguration() {
-        // Initialize outputs from project
+        log("loadProjectConfiguration: Starting...");
+
+        // Clear UI state first
+        log("loadProjectConfiguration: Calling clearUIState()");
+        clearUIState();
+        log("loadProjectConfiguration: clearUIState() completed");
+
+        // Initialize outputs from project (clears old outputs, creates new ones from project config)
+        log("loadProjectConfiguration: Calling initializeOutputsFromProject()");
         initializeOutputsFromProject();
+        log("loadProjectConfiguration: initializeOutputsFromProject() completed");
+
+        // Update UI components (only if they exist)
+        if (outputComboBox != null) {
+            log("loadProjectConfiguration: Updating outputs list");
+            updateOutputsList();
+            // Ensure default is selected
+            outputComboBox.getSelectionModel().select("default");
+            selectedOutputId = "default";
+            log("loadProjectConfiguration: Selected output: " + selectedOutputId);
+        }
 
         // Load input host and port from project
         ProjectConfig project = projectManager.getCurrentProject();
         if (project != null) {
+            log("loadProjectConfiguration: Setting input fields - host:" + project.getInHost() + " port:" + project.getInPort());
             if (inHostField != null) {
                 inHostField.setText(project.getInHost());
             }
@@ -709,18 +854,33 @@ public class OSCProxyApp extends Application {
             }
         }
 
-        // Update UI components (only if they exist)
-        if (outputComboBox != null) {
-            updateOutputsList();
+        // Update output fields for the selected output
+        if (outHostField != null && outPortField != null) {
+            log("loadProjectConfiguration: Updating output fields");
+            updateOutputFields();
+            log("loadProjectConfiguration: Output fields - host:" + outHostField.getText() + " port:" + outPortField.getText());
         }
+
+        // Update sessions list
         if (sessionComboBox != null) {
+            log("loadProjectConfiguration: Updating sessions list");
             updateSessionsList();
+            log("loadProjectConfiguration: Sessions count: " + sessionComboBox.getItems().size());
         }
 
         // Update NodeChainManager to show the current output's node chain
         if (nodeChainManager != null && selectedOutputId != null) {
+            log("loadProjectConfiguration: Setting NodeChainManager outputId to: " + selectedOutputId);
             nodeChainManager.setOutputId(selectedOutputId);
         }
+
+        // Reload sampler configuration from the new project
+        if (samplerPadUI != null) {
+            log("loadProjectConfiguration: Reloading sampler configuration");
+            samplerPadUI.reloadConfiguration();
+        }
+
+        log("loadProjectConfiguration: Completed");
     }
 
     /**
@@ -961,6 +1121,35 @@ public class OSCProxyApp extends Application {
                 }
             }
         });
+    }
+
+    /**
+     * Restart the proxy after switching projects.
+     * Uses the current UI field values (which have been updated from the project config).
+     */
+    private void restartProxyAfterProjectChange() {
+        try {
+            // Update input settings from UI fields
+            proxyService.setInHost(inHostField.getText());
+            proxyService.setInPort(Integer.parseInt(inPortField.getText()));
+
+            // Update selected output settings from UI fields
+            OSCOutputService output = proxyService.getOutput(selectedOutputId);
+            if (output != null) {
+                output.setOutHost(outHostField.getText());
+                output.setOutPort(Integer.parseInt(outPortField.getText()));
+            }
+
+            // Start the proxy
+            proxyService.startProxy();
+
+            log("Proxy started - In: " + inHostField.getText() + ":" + inPortField.getText() +
+                " Out[" + selectedOutputId + "]: " + outHostField.getText() + ":" + outPortField.getText());
+        } catch (Exception ex) {
+            String errorMsg = "Failed to start proxy: " + ex.getMessage();
+            log("ERROR: " + errorMsg);
+            statusBar.setText(errorMsg);
+        }
     }
 
     /**

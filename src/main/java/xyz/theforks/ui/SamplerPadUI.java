@@ -748,6 +748,69 @@ public class SamplerPadUI extends VBox {
         }
     }
 
+    /**
+     * Clear all sampler pad configurations and reset to empty state.
+     * This includes clearing all pad assignments, bank output routes, and MIDI mappings.
+     */
+    public void clearAllPads() {
+        Platform.runLater(() -> {
+            // Clear all pad configurations
+            for (Map.Entry<Integer, Map<Integer, SamplerPad>> bankEntry : bankPads.entrySet()) {
+                int bank = bankEntry.getKey();
+                Map<Integer, SamplerPad> pads = bankEntry.getValue();
+
+                for (Map.Entry<Integer, SamplerPad> padEntry : pads.entrySet()) {
+                    int padIndex = padEntry.getKey();
+
+                    // Replace with empty pad (SamplerPad is immutable)
+                    pads.put(padIndex, new SamplerPad());
+
+                    // Update button appearance
+                    Button button = bankPadButtons.get(bank).get(padIndex);
+                    if (button != null) {
+                        button.setText("Empty");
+                        button.setStyle("-fx-background-color: #888888; -fx-text-fill: white; -fx-font-size: 14px;");
+                    }
+                }
+            }
+
+            // Reset all bank output routes to "Proxy"
+            for (ComboBox<String> routeCombo : bankOutputRoutes.values()) {
+                if (routeCombo != null) {
+                    routeCombo.setValue("Proxy");
+                }
+            }
+
+            // Clear MIDI mappings
+            midiMappings.clear();
+
+            // Clear active pads
+            activePads.clear();
+
+            // Save the cleared configuration
+            saveConfiguration();
+
+            log("Cleared all sampler pads and configurations");
+        });
+    }
+
+    /**
+     * Reload the sampler configuration from the current project.
+     * Should be called when switching projects.
+     */
+    public void reloadConfiguration() {
+        loadConfiguration();
+    }
+
+    /**
+     * Get the output route ComboBox for a specific bank.
+     * @param bank The bank index (0-3)
+     * @return The ComboBox for the bank's output route, or null if bank is invalid
+     */
+    public ComboBox<String> getBankOutputRoute(int bank) {
+        return bankOutputRoutes.get(bank);
+    }
+
     private void log(String message) {
         if (logArea != null) {
             javafx.application.Platform.runLater(() -> {

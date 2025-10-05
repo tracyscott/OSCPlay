@@ -12,6 +12,8 @@ import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
+import org.kordamp.ikonli.javafx.FontIcon;
+import org.kordamp.ikonli.ionicons4.Ionicons4IOS;
 import xyz.theforks.model.OSCMessageRecord;
 import xyz.theforks.model.RecordingSession;
 import xyz.theforks.service.OSCProxyService;
@@ -68,7 +70,6 @@ public class RecordingEditorUI extends VBox {
         messageData = FXCollections.observableArrayList();
         messagesTable.setItems(messageData);
         messagesTable.setEditable(true);
-        messagesTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
 
         // Timestamp column (editable)
         TableColumn<MessageRow, String> timestampCol = new TableColumn<>("Timestamp (ms)");
@@ -82,7 +83,9 @@ public class RecordingEditorUI extends VBox {
                 log("Invalid timestamp: " + event.getNewValue());
             }
         });
-        timestampCol.setPrefWidth(120);
+        timestampCol.setMinWidth(130);
+        timestampCol.setMaxWidth(130);
+        timestampCol.setResizable(false);
 
         // Address column (editable)
         TableColumn<MessageRow, String> addressCol = new TableColumn<>("Address");
@@ -91,21 +94,39 @@ public class RecordingEditorUI extends VBox {
         addressCol.setOnEditCommit(event -> {
             event.getRowValue().setAddress(event.getNewValue());
         });
-        addressCol.setPrefWidth(200);
+        addressCol.setMinWidth(250);
+        addressCol.setMaxWidth(250);
+        addressCol.setResizable(false);
 
-        // Arguments column (custom rendering)
+        // Arguments column (custom rendering) - takes remaining space
         TableColumn<MessageRow, MessageRow> argsCol = new TableColumn<>("Arguments");
         argsCol.setCellValueFactory(param -> new SimpleObjectProperty<>(param.getValue()));
         argsCol.setCellFactory(col -> new ArgumentsCell());
-        argsCol.setPrefWidth(400);
+        argsCol.setMinWidth(535);
+        argsCol.setPrefWidth(535);
+        argsCol.setResizable(true);
 
-        // Actions column (delete button)
+        // Actions column (clone and delete buttons)
         TableColumn<MessageRow, MessageRow> actionsCol = new TableColumn<>("Actions");
         actionsCol.setCellValueFactory(param -> new SimpleObjectProperty<>(param.getValue()));
         actionsCol.setCellFactory(col -> new ActionsCell());
-        actionsCol.setPrefWidth(80);
+        actionsCol.setMinWidth(80);
+        actionsCol.setMaxWidth(80);
+        actionsCol.setResizable(false);
 
-        messagesTable.getColumns().addAll(timestampCol, addressCol, argsCol, actionsCol);
+        messagesTable.getColumns().addAll(actionsCol, timestampCol, addressCol, argsCol);
+
+        // Make table resize policy to fit content and disable filler column
+        messagesTable.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
+        messagesTable.skinProperty().addListener((obs, oldSkin, newSkin) -> {
+            if (newSkin != null) {
+                // Hide the filler column
+                javafx.scene.Node header = messagesTable.lookup(".filler");
+                if (header != null) {
+                    header.setVisible(false);
+                }
+            }
+        });
 
         // Add message button
         Button addMessageButton = new Button("Add Message");
@@ -132,6 +153,18 @@ public class RecordingEditorUI extends VBox {
         } else {
             recordingComboBox.setValue("New");
         }
+    }
+
+    /**
+     * Reset the recording editor to initial state (New recording with empty table).
+     */
+    public void resetToNew() {
+        recordingComboBox.getItems().clear();
+        recordingComboBox.getItems().add("New");
+        recordingComboBox.setValue("New");
+        currentSession = null;
+        currentSessionName = null;
+        messageData.clear();
     }
 
     private void handleRecordingSelection() {
@@ -420,6 +453,13 @@ public class RecordingEditorUI extends VBox {
         public ArgumentsCell() {
             container = new HBox(5);
             container.setAlignment(Pos.CENTER_LEFT);
+
+            // Listen for container width changes to update column width
+            container.widthProperty().addListener((obs, oldVal, newVal) -> {
+                if (getTableColumn() != null && newVal.doubleValue() > getTableColumn().getWidth()) {
+                    getTableColumn().setPrefWidth(newVal.doubleValue() + 20);
+                }
+            });
         }
 
         @Override
@@ -439,18 +479,21 @@ public class RecordingEditorUI extends VBox {
                     ComboBox<String> typeCombo = new ComboBox<>();
                     typeCombo.getItems().addAll("Int", "Float", "Bool", "String", "Infinitum");
                     typeCombo.setValue(arg.getType());
-                    typeCombo.setMinWidth(90);
+                    typeCombo.setMinWidth(70);
+                    typeCombo.setMaxWidth(70);
 
                     TextField valueField = new TextField(arg.getValue());
                     valueField.setPromptText("Value");
-                    valueField.setMinWidth(100);
+                    valueField.setMinWidth(60);
+                    valueField.setMaxWidth(60);
                     setupFieldEditFeedback(valueField, arg);
 
                     // ComboBox for Boolean values (true/false)
                     ComboBox<String> boolCombo = new ComboBox<>();
                     boolCombo.getItems().addAll("true", "false");
                     boolCombo.setValue(arg.getValue().isEmpty() ? "true" : arg.getValue());
-                    boolCombo.setMinWidth(100);
+                    boolCombo.setMinWidth(40);
+                    boolCombo.setMaxWidth(70);
                     boolCombo.setOnAction(e -> {
                         arg.setValue(boolCombo.getValue());
                     });
@@ -535,16 +578,52 @@ public class RecordingEditorUI extends VBox {
 
     // Custom cell for action buttons
     private class ActionsCell extends TableCell<MessageRow, MessageRow> {
+        private final HBox buttonBox;
+        private final Button cloneBtn;
         private final Button deleteBtn;
 
         public ActionsCell() {
-            deleteBtn = new Button("Delete");
+            buttonBox = new HBox(5);
+            buttonBox.setAlignment(Pos.CENTER);
+
+            cloneBtn = new Button();
+            FontIcon cloneIcon = new FontIcon(Ionicons4IOS.COPY);
+            cloneIcon.setIconSize(16);
+            cloneIcon.setIconColor(javafx.scene.paint.Color.LIGHTGRAY);
+            cloneBtn.setGraphic(cloneIcon);
+            cloneBtn.setOnAction(e -> {
+                MessageRow row = getTableRow().getItem();
+                if (row != null) {
+                    // Create a cloned message with timestamp + 1000ms
+                    MessageRow clonedRow = new MessageRow();
+                    clonedRow.setTimestamp(String.valueOf(Long.parseLong(row.getTimestamp()) + 1000));
+                    clonedRow.setAddress(row.getAddress());
+
+                    // Copy arguments
+                    for (ArgumentData arg : row.getArguments()) {
+                        clonedRow.getArguments().add(new ArgumentData(arg.getType(), arg.getValue()));
+                    }
+
+                    // Insert after current row
+                    int currentIndex = messageData.indexOf(row);
+                    messageData.add(currentIndex + 1, clonedRow);
+                    messagesTable.scrollTo(clonedRow);
+                }
+            });
+
+            deleteBtn = new Button();
+            FontIcon trashIcon = new FontIcon(Ionicons4IOS.TRASH);
+            trashIcon.setIconSize(16);
+            trashIcon.setIconColor(javafx.scene.paint.Color.LIGHTGRAY);
+            deleteBtn.setGraphic(trashIcon);
             deleteBtn.setOnAction(e -> {
                 MessageRow row = getTableRow().getItem();
                 if (row != null) {
                     messageData.remove(row);
                 }
             });
+
+            buttonBox.getChildren().addAll(cloneBtn, deleteBtn);
         }
 
         @Override
@@ -554,7 +633,7 @@ public class RecordingEditorUI extends VBox {
             if (empty || row == null) {
                 setGraphic(null);
             } else {
-                setGraphic(deleteBtn);
+                setGraphic(buttonBox);
             }
         }
     }
