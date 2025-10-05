@@ -12,7 +12,7 @@ OSCPlay is a Java-based OSC (Open Sound Control) proxy server that captures, rec
 - **Session Playback**: Replay recorded sessions without the original OSC source
   - Synchronized audio playback support - play audio files alongside OSC automation
 - **Manual Editing**: Edit recorded OSC messages directly through the UI
-- **Sampler Banks**: Built-in pad interface for triggering recordings
+- **Sampler Banks**: Built-in pad interface for triggering session recordings
   - MIDI integration - trigger sampler pads via MIDI input
   - OSC triggering - trigger pads remotely via OSC messages
 - **Message Processing**: Chain configurable nodes to modify OSC messages:
@@ -21,36 +21,14 @@ OSCPlay is a Java-based OSC (Open Sound Control) proxy server that captures, rec
   - Filter/drop messages by pattern
   - Runtime JavaScript processing for custom transformations
   - And more...
-- **Cross-Platform**: Runs on Windows, macOS, and Linux
-- **Both GUI and CLI**: Interactive JavaFX interface or command-line operation
+- **Cross-Platform**: Runs on Windows and macOS
 
 ## Quick Start
 
 ### Download
 
-Download the latest `osc-play-X.X.X-shaded.jar` from the [Releases](../../releases) page.
+Download the latest from the [Releases](../../releases) page.
 
-### Running
-
-**GUI Mode (Interactive):**
-```bash
-java -jar osc-play-1.1.1-shaded.jar --port 3030
-```
-
-**CLI Mode (Playback):**
-```bash
-# Windows
-oscsession.bat mysession
-
-# macOS/Linux
-./oscsession.sh mysession
-```
-
-**Command Options:**
-- `--port <port>` - Proxy server port (default: 3030)
-- `--host <hostname>` - Destination host (default: localhost)
-- `--session <name>` - Auto-load and play session (CLI mode)
-- `--help` - Show help
 
 ## How It Works
 
@@ -67,14 +45,13 @@ Requires Java 17 and Maven:
 
 ```bash
 mvn clean package
-java -jar target/osc-play-1.1.1-shaded.jar --port 3030
+java -jar target/osc-play-2.0.0-shaded.jar
 ```
 
 ## Documentation
 
-- [CLAUDE.md](CLAUDE.md) - Developer documentation and architecture details
 - Message processing nodes - Configure via the GUI's "Manage Node Chains" interface
-- JavaScript scripting - Use ScriptNode for runtime-configurable message processing
+- JavaScript scripting - See [scriptnodes/README.md](scriptnodes/README.md) for ScriptNode documentation and examples
 
 ## License
 
@@ -82,7 +59,7 @@ java -jar target/osc-play-1.1.1-shaded.jar --port 3030
 
 ## Version
 
-Current version: 1.1.1
+Current version: 2.0.0
 
 
 

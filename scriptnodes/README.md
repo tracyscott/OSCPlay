@@ -94,17 +94,17 @@ function process(message) {
 
 ## Usage in OSCPlay
 
-1. Place your `.js` file in the project `Scripts/` directory (or the shared `scriptnodes/` folder for reference).
+1. Place your `.js` file in the project `Scripts/` directory.
 2. In OSCPlay, add a **Script** node to a chain.
 3. Configure it with:
    - **Address Pattern** – regex that selects which inbound messages reach the script (`.*` for all traffic)
-   - **Script Path** – relative path to your file (e.g. `scriptnodes/transform_example.js`)
+   - **Script Path** – your filename in the Scripts/ directory (e.g. `transform_example.js`)
 
 The node will load immediately and refresh whenever you save changes. Use the node's **Reload** and **Test** buttons to validate behavior quickly.
 
 ## Debugging Tips
 
-- Script errors are printed to the OSCPlay log; the original message passes through on error.
+- Script errors are printed to the OSCPlay console; the original message passes through on error.
 - Use `print('debug: ' + value);` for quick logging.
 - The preferences dialog shows current script contents and offers Reload/Test actions.
 - Keep hot-path scripts simple; heavy computation can stall realtime playback.
@@ -126,4 +126,3 @@ function process(message) {
 }
 ```
 
-Use this sparingly—prefer the provided helpers for clarity and portability.
