@@ -1,29 +1,29 @@
 /**
- * Message filtering example
+ * Message Filtering Example
  *
- * This script filters out messages based on argument values.
- * Returns null to drop a message.
+ * Returns null/false to drop messages that fail the checks.
+ * The ScriptNode environment also exposes:
+ * - createMessage(address, argsArray)
+ * - createMessageRequest(message, delayMs?, outputId?)
+ * so the script can transform or reroute messages when needed.
  */
-
 function process(message) {
     var args = message.getArguments();
 
-    // Drop messages with no arguments
     if (args.isEmpty()) {
+        return null; // Drop empty payloads
+    }
+
+    // Drop messages where the first argument is 0 or below threshold
+    var first = args.get(0);
+    if (first === 0) {
         return null;
     }
 
-    // Drop messages where first argument is 0
-    if (args.size() > 0 && args.get(0) === 0) {
-        return null;
-    }
-
-    // Drop messages where first argument is less than threshold
     var threshold = 10;
-    if (args.size() > 0 && typeof args.get(0) === 'number' && args.get(0) < threshold) {
+    if (typeof first === 'number' && first < threshold) {
         return null;
     }
 
-    // Pass through all other messages
     return message;
 }

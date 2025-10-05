@@ -1,20 +1,13 @@
 /**
- * OSCPlay Script Node
+ * ScriptNode Quickstart Template
  *
- * This script processes OSC messages. Modify the process() function
- * to transform, filter, or pass through messages.
- *
- * Available API:
- * - message.getAddress()     - Get OSC address string
- * - message.getArguments()   - Get arguments list
- * - createMessage(addr, args) - Create new OSC message
- *
- * Return values:
- * - OSCMessage: Send the message
- * - null or false: Drop the message
+ * Replace the body of process(message) with custom logic.
+ * Helper functions exposed by OSCPlay:
+ * - createMessage(address, argsArray)
+ * - createMessageRequest(message, delayMs?, outputId?)
+ * Return an OSCMessage, MessageRequest, array of either, or null/false to drop.
  */
-
 function process(message) {
-    // Pass through all messages unchanged
+    // Example: pass everything through unchanged.
     return message;
 }

@@ -1,18 +1,20 @@
 /**
- * Simple address renaming example
+ * Address Renaming Example
  *
- * This script renames OSC addresses from /note/* to /midi/note/*
+ * Demonstrates simple address rewriting while returning a MessageRequest.
+ * Helpers available inside ScriptNode:
+ * - message.getAddress() / message.getArguments()
+ * - createMessage(address, argsArray)
+ * - createMessageRequest(message, delayMs?, outputId?)
  */
-
 function process(message) {
     var address = message.getAddress();
 
-    // Rename /note/* to /midi/note/*
     if (address.startsWith("/note/")) {
         var newAddress = address.replace("/note/", "/midi/note/");
-        return createMessage(newAddress, message.getArguments().toArray());
+        var renamedMessage = createMessage(newAddress, message.getArguments().toArray());
+        return createMessageRequest(renamedMessage);
     }
 
-    // Return original message unchanged
     return message;
 }

@@ -1,35 +1,44 @@
 /**
- * OSCPlay Script Node
+ * Delayed Lowercase Echo
  *
- * This script processes OSC messages. Modify the process() function
- * to transform, filter, or pass through messages.
+ * Shows how to produce delayed output using MessageRequest helpers.
+ * - createMessage(address, argsArray) builds a new OSCMessage
+ * - createMessageRequest(message, delayMs?, outputId?) wraps the message with routing metadata
  *
- * Available API:
- * - message.getAddress()     - Get OSC address string
- * - message.getArguments()   - Get arguments list
- * - createMessage(addr, args) - Create new OSC message
- *
- * Return values:
- * - OSCMessage: Send the message
- * - null or false: Drop the message
+ * The script returns an array so the node sends multiple messages.
  */
-
 function process(message) {
-    var OSCMessage = Java.type('com.illposed.osc.OSCMessage');
-    
     var args = message.getArguments();
-    var newArgs = [];
+    if (args.isEmpty()) {
+        return message;
+    }
+
+    var loweredArgs = [];
+    var mutated = false;
+
     for (var i = 0; i < args.size(); i++) {
-        var arg = args.get(i);
-        if (typeof arg === 'string') {
-            newArgs.push(arg.toLowerCase());
+        var value = args.get(i);
+        if (typeof value === 'string') {
+            var lowered = value.toLowerCase();
+            loweredArgs.push(lowered);
+            if (lowered !== value) {
+                mutated = true;
+            }
         } else {
-            newArgs.push(arg);
+            loweredArgs.push(value);
         }
     }
 
-    // Create a new instance
-    var newMessage = new OSCMessage(message.getAddress(), newArgs);
-    
-    return newMessage;
+    if (!mutated) {
+        // Nothing to change; pass the original through unchanged.
+        return message;
+    }
+
+    var loweredMessage = createMessage(message.getAddress(), loweredArgs);
+
+    // Send the lowered message immediately and again after 120ms (e.g., for a soft echo).
+    return [
+        createMessageRequest(loweredMessage),
+        createMessageRequest(loweredMessage, 120)
+    ];
 }
