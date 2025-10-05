@@ -19,14 +19,19 @@ import javax.script.ScriptException;
 
 import com.illposed.osc.OSCMessage;
 
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
+import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.GridPane;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.stage.Stage;
 import xyz.theforks.service.ProjectManager;
@@ -42,6 +47,10 @@ public class ScriptNode implements OSCNode {
     private Invocable invocable;
     private FileTime lastModified;
     private String lastError;
+
+    // Default test message
+    private String testAddress = "/test/message";
+    private ObservableList<TestArgument> testArguments = FXCollections.observableArrayList();
 
     // Project manager for accessing project scripts directory
     private static ProjectManager projectManager;
@@ -92,6 +101,13 @@ public class ScriptNode implements OSCNode {
 
         addressPattern = args[0];
         scriptPath = args[1];
+
+        // Initialize default test arguments if empty
+        if (testArguments.isEmpty()) {
+            testArguments.add(new TestArgument("Int", "1"));
+            testArguments.add(new TestArgument("Float", "2.5"));
+            testArguments.add(new TestArgument("String", "test"));
+        }
 
         // Initialize the script engine
         return loadScript();
@@ -183,10 +199,31 @@ public class ScriptNode implements OSCNode {
         // Load script content
         loadScriptContent(contentArea);
 
+        // Test message row
+        Label testLabel = new Label("Test Message:");
+        grid.add(testLabel, 0, 3);
+
+        HBox testMessageRow = new HBox(10);
+        testMessageRow.setAlignment(Pos.CENTER_LEFT);
+
+        // Address field
+        TextField testAddressField = new TextField(testAddress);
+        testAddressField.setPrefWidth(200);
+        testAddressField.setPromptText("OSC Address");
+        testMessageRow.getChildren().add(testAddressField);
+
+        // Arguments container
+        HBox argsContainer = new HBox(5);
+        argsContainer.setAlignment(Pos.CENTER_LEFT);
+        updateArgumentsUI(argsContainer);
+        testMessageRow.getChildren().add(argsContainer);
+
+        grid.add(testMessageRow, 0, 4, 2, 1);
+
         // Status label
         Label statusLabel = new Label();
         statusLabel.setWrapText(true);
-        grid.add(statusLabel, 0, 3, 2, 1);
+        grid.add(statusLabel, 0, 5, 2, 1);
 
         // Button row
         GridPane buttonGrid = new GridPane();
@@ -230,8 +267,40 @@ public class ScriptNode implements OSCNode {
         Button testButton = new Button("Test");
         testButton.setOnAction(e -> {
             try {
-                // Create a test message
-                OSCMessage testMsg = new OSCMessage("/test/message", Arrays.asList(1, 2.5f, "test"));
+                // Update test address from field
+                testAddress = testAddressField.getText();
+
+                // Build test message from UI fields
+                java.util.List<Object> args = new java.util.ArrayList<>();
+                for (TestArgument arg : testArguments) {
+                    switch (arg.getType()) {
+                        case "Int":
+                            try {
+                                args.add(Integer.parseInt(arg.getValue()));
+                            } catch (NumberFormatException ex) {
+                                args.add(0);
+                            }
+                            break;
+                        case "Float":
+                            try {
+                                args.add(Float.parseFloat(arg.getValue()));
+                            } catch (NumberFormatException ex) {
+                                args.add(0.0f);
+                            }
+                            break;
+                        case "Bool":
+                            args.add(Boolean.parseBoolean(arg.getValue()));
+                            break;
+                        case "String":
+                            args.add(arg.getValue());
+                            break;
+                        case "Infinitum":
+                            args.add(null);
+                            break;
+                    }
+                }
+
+                OSCMessage testMsg = new OSCMessage(testAddress, args);
                 java.util.List<xyz.theforks.model.MessageRequest> requests = new java.util.ArrayList<>();
                 requests.add(new xyz.theforks.model.MessageRequest(testMsg));
 
@@ -240,7 +309,7 @@ public class ScriptNode implements OSCNode {
                 if (requests.isEmpty()) {
                     statusLabel.setText("Test result: Message dropped (empty list)");
                 } else {
-                    StringBuilder sb = new StringBuilder("Test results:\n");
+                    StringBuilder sb = new StringBuilder("Test results:");
                     for (xyz.theforks.model.MessageRequest req : requests) {
                         sb.append("- ").append(req.getMessage().getAddress())
                           .append(" args=").append(req.getMessage().getArguments());
@@ -259,27 +328,12 @@ public class ScriptNode implements OSCNode {
         });
         buttonGrid.add(testButton, 2, 0);
 
-        // Update Path button
-        Button updatePathButton = new Button("Update Path");
-        updatePathButton.setOnAction(e -> {
-            scriptPath = pathField.getText();
-            if (loadScript()) {
-                loadScriptContent(contentArea);
-                statusLabel.setText("Script path updated and loaded");
-                statusLabel.setStyle("-fx-text-fill: green;");
-            } else {
-                statusLabel.setText("Error loading script: " + lastError);
-                statusLabel.setStyle("-fx-text-fill: red;");
-            }
-        });
-        buttonGrid.add(updatePathButton, 3, 0);
-
         // Close button
         Button closeButton = new Button("Close");
         closeButton.setOnAction(e -> stage.close());
         buttonGrid.add(closeButton, 4, 0);
 
-        grid.add(buttonGrid, 0, 4, 2, 1);
+        grid.add(buttonGrid, 0, 6, 2, 1);
 
         Scene scene = new Scene(grid, 700, 500);
         xyz.theforks.ui.Theme.applyDark(scene);
@@ -412,6 +466,93 @@ public class ScriptNode implements OSCNode {
     }
 
     /**
+     * Update the arguments UI container with current test arguments
+     */
+    private void updateArgumentsUI(HBox argsContainer) {
+        argsContainer.getChildren().clear();
+
+        for (int i = 0; i < testArguments.size(); i++) {
+            final int index = i;
+            TestArgument arg = testArguments.get(i);
+
+            ComboBox<String> typeCombo = new ComboBox<>();
+            typeCombo.getItems().addAll("Int", "Float", "Bool", "String", "Infinitum");
+            typeCombo.setValue(arg.getType());
+            typeCombo.setMinWidth(70);
+            typeCombo.setMaxWidth(70);
+
+            TextField valueField = new TextField(arg.getValue());
+            valueField.setPromptText("Value");
+            valueField.setMinWidth(60);
+            valueField.setMaxWidth(60);
+
+            // ComboBox for Boolean values
+            ComboBox<String> boolCombo = new ComboBox<>();
+            boolCombo.getItems().addAll("true", "false");
+            boolCombo.setValue(arg.getValue().isEmpty() ? "true" : arg.getValue());
+            boolCombo.setMinWidth(60);
+            boolCombo.setMaxWidth(60);
+            boolCombo.setOnAction(e -> arg.setValue(boolCombo.getValue()));
+
+            Button removeBtn = new Button("-");
+            removeBtn.setOnAction(e -> {
+                testArguments.remove(index);
+                updateArgumentsUI(argsContainer);
+            });
+
+            // Update value field/combobox visibility based on type
+            typeCombo.setOnAction(e -> {
+                arg.setType(typeCombo.getValue());
+                String selectedType = typeCombo.getValue();
+
+                valueField.setVisible(false);
+                valueField.setManaged(false);
+                boolCombo.setVisible(false);
+                boolCombo.setManaged(false);
+
+                if ("Bool".equals(selectedType)) {
+                    boolCombo.setVisible(true);
+                    boolCombo.setManaged(true);
+                    if (!arg.getValue().equals("true") && !arg.getValue().equals("false")) {
+                        arg.setValue("true");
+                        boolCombo.setValue("true");
+                    }
+                } else if (!"Infinitum".equals(selectedType)) {
+                    valueField.setVisible(true);
+                    valueField.setManaged(true);
+                }
+            });
+
+            // Listen to value changes
+            valueField.textProperty().addListener((obs, oldVal, newVal) -> arg.setValue(newVal));
+
+            // Set initial visibility
+            valueField.setVisible(false);
+            valueField.setManaged(false);
+            boolCombo.setVisible(false);
+            boolCombo.setManaged(false);
+
+            if ("Bool".equals(arg.getType())) {
+                boolCombo.setVisible(true);
+                boolCombo.setManaged(true);
+            } else if (!"Infinitum".equals(arg.getType())) {
+                valueField.setVisible(true);
+                valueField.setManaged(true);
+            }
+
+            argsContainer.getChildren().addAll(typeCombo, valueField, boolCombo, removeBtn);
+        }
+
+        // Add + button
+        Button addBtn = new Button("+");
+        addBtn.setOnAction(e -> {
+            testArguments.add(new TestArgument("Float", "0.0"));
+            updateArgumentsUI(argsContainer);
+        });
+        argsContainer.getChildren().add(addBtn);
+    }
+
+    /**
      * Create a boilerplate script file with basic structure.
      * @param path The path where the script should be created
      * @return true if script was created successfully, false otherwise
@@ -452,6 +593,35 @@ public class ScriptNode implements OSCNode {
         } catch (IOException e) {
             System.err.println("ScriptNode: Failed to create boilerplate script: " + e.getMessage());
             return false;
+        }
+    }
+
+    /**
+     * Simple class to hold test argument type and value
+     */
+    private static class TestArgument {
+        private String type;
+        private String value;
+
+        public TestArgument(String type, String value) {
+            this.type = type;
+            this.value = value;
+        }
+
+        public String getType() {
+            return type;
+        }
+
+        public void setType(String type) {
+            this.type = type;
+        }
+
+        public String getValue() {
+            return value;
+        }
+
+        public void setValue(String value) {
+            this.value = value;
         }
     }
 }
