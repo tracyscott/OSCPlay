@@ -288,7 +288,7 @@ public class OSCProxyApp extends Application {
         outPortField.setMaxWidth(200);  // Doubled from 100
         outPortField.setStyle("-fx-font-size: 11px;");
         proxyGrid.add(outPortField, 2, 2);
-        enableOutputCheckBox = new CheckBox("Enabled");
+        enableOutputCheckBox = new CheckBox("Proxy");
         enableOutputCheckBox.setSelected(true);
         proxyGrid.add(enableOutputCheckBox, 3, 2);
 

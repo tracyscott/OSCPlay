@@ -109,7 +109,7 @@ public class MultiOutputManager {
         idField.setPromptText("unique-id");
         TextField hostField = new TextField("127.0.0.1");
         TextField portField = new TextField("3030");
-        CheckBox enabledCheckBox = new CheckBox("Enabled");
+        CheckBox enabledCheckBox = new CheckBox("Proxy");
         enabledCheckBox.setSelected(true);
 
         grid.add(new Label("ID:"), 0, 0);
@@ -196,7 +196,7 @@ public class MultiOutputManager {
 
         TextField hostField = new TextField(output.getOutHost());
         TextField portField = new TextField(String.valueOf(output.getOutPort()));
-        CheckBox enabledCheckBox = new CheckBox("Enabled");
+        CheckBox enabledCheckBox = new CheckBox("Proxy");
         enabledCheckBox.setSelected(output.isEnabled());
 
         grid.add(new Label("ID:"), 0, 0);
