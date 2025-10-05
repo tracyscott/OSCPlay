@@ -48,12 +48,14 @@ public class SamplerPadUI extends VBox {
     private int learnBankNumber = -1;
     private int learnPadNumber = -1;
     private boolean isLoading = false;
+    private final javafx.scene.control.Label statusBar;
 
-    public SamplerPadUI(OSCProxyService proxyService, Playback playback, TextArea logArea, ProjectManager projectManager) {
+    public SamplerPadUI(OSCProxyService proxyService, Playback playback, TextArea logArea, ProjectManager projectManager, javafx.scene.control.Label statusBar) {
         this.proxyService = proxyService;
         this.playback = playback;
         this.logArea = logArea;
         this.projectManager = projectManager;
+        this.statusBar = statusBar;
         this.bankGrids = new HashMap<>();
         this.bankPads = new HashMap<>();
         this.bankPadButtons = new HashMap<>();
@@ -289,6 +291,24 @@ public class SamplerPadUI extends VBox {
 
             contextMenu.getItems().addAll(configureItem, clearItem, new SeparatorMenuItem(), clearMidiItem);
             contextMenu.show(button, e.getScreenX(), e.getScreenY());
+        });
+
+        // Hover handlers: show OSC address in status bar
+        button.setOnMouseEntered(e -> {
+            if (statusBar != null) {
+                // OSC address format: /oscplay/sampler<bank> <padNumber>
+                // bank is 1-based, padNumber is 1-based
+                int bankNumber = bank + 1;
+                int padNumber = padIndex + 1;
+                String oscAddress = "/oscplay/sampler" + bankNumber + " " + padNumber;
+                statusBar.setText(oscAddress);
+            }
+        });
+
+        button.setOnMouseExited(e -> {
+            if (statusBar != null) {
+                statusBar.setText("");
+            }
         });
 
         return button;

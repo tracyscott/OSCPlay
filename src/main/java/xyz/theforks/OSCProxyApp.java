@@ -391,7 +391,7 @@ public class OSCProxyApp extends Application {
         Tab playbackTab = new Tab("Playback", playbackSection);
 
         // Create Sampler tab content
-        samplerPadUI = new SamplerPadUI(proxyService, playback, logArea, projectManager);
+        samplerPadUI = new SamplerPadUI(proxyService, playback, logArea, projectManager, statusBar);
         // Connect sampler pad UI to proxy service for OSC command handling
         proxyService.setSamplerPadUI(samplerPadUI);
         Tab samplerTab = new Tab("Sampler", samplerPadUI);
