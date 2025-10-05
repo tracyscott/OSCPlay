@@ -13,8 +13,9 @@ import com.illposed.osc.OSCMessage;
  */
 public class MessageRequest {
     private final OSCMessage message;
-    private final long delayMs;              // 0 = immediate, >0 = delay in ms
+    private long delayMs;              // 0 = immediate, >0 = delay in ms
     private final String targetOutputId;      // null = current output only, specific ID = route to that output
+    private final long previousDelay;         // Delay previously applied (used during playback to prevent re-delay)
 
     /**
      * Constructor for immediate send (most common case).
@@ -23,7 +24,7 @@ public class MessageRequest {
      * @param message The OSC message to send
      */
     public MessageRequest(OSCMessage message) {
-        this(message, 0, null);
+        this(message, 0, null, 0);
     }
 
     /**
@@ -34,20 +35,33 @@ public class MessageRequest {
      * @param delayMs Delay in milliseconds (0 = immediate)
      */
     public MessageRequest(OSCMessage message, long delayMs) {
-        this(message, delayMs, null);
+        this(message, delayMs, null, 0);
     }
 
     /**
-     * Full constructor with delay and routing.
+     * Constructor with delay and routing.
      *
      * @param message The OSC message to send
      * @param delayMs Delay in milliseconds (0 = immediate)
      * @param targetOutputId Target output ID (null = current output only)
      */
     public MessageRequest(OSCMessage message, long delayMs, String targetOutputId) {
+        this(message, delayMs, targetOutputId, 0);
+    }
+
+    /**
+     * Full constructor with delay, routing, and previous delay tracking.
+     *
+     * @param message The OSC message to send
+     * @param delayMs Delay in milliseconds (0 = immediate)
+     * @param targetOutputId Target output ID (null = current output only)
+     * @param previousDelay Previously applied delay (used to prevent re-delaying during playback)
+     */
+    public MessageRequest(OSCMessage message, long delayMs, String targetOutputId, long previousDelay) {
         this.message = message;
         this.delayMs = delayMs;
         this.targetOutputId = targetOutputId;
+        this.previousDelay = previousDelay;
     }
 
     /**
@@ -64,6 +78,15 @@ public class MessageRequest {
      */
     public long getDelayMs() {
         return delayMs;
+    }
+
+    /**
+     * Set the delay in milliseconds.
+     * @param delayMs Delay in milliseconds (0 = immediate)
+     * @return
+     */
+    public void setDelayMs(long delayMs) {
+        this.delayMs = delayMs;
     }
 
     /**
@@ -88,5 +111,21 @@ public class MessageRequest {
      */
     public boolean hasTargetOutput() {
         return targetOutputId != null;
+    }
+
+    /**
+     * Get the previously applied delay.
+     * @return Previously applied delay in milliseconds
+     */
+    public long getPreviousDelay() {
+        return previousDelay;
+    }
+
+    /**
+     * Check if this message was previously delayed.
+     * @return true if previousDelay > 0
+     */
+    public boolean wasPreviouslyDelayed() {
+        return previousDelay > 0;
     }
 }

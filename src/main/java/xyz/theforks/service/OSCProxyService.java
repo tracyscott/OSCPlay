@@ -32,6 +32,7 @@ public class OSCProxyService {
     private final IntegerProperty totalMessageCount = new SimpleIntegerProperty(0);
     private ProjectManager projectManager;
     private xyz.theforks.ui.SamplerPadUI samplerPadUI;
+    private ProxyDelayProcessor delayProcessor;
 
     public OSCProxyService() {
         this(null);
@@ -54,6 +55,9 @@ public class OSCProxyService {
         defaultOutput.setOutPort(3030);
         defaultOutput.setEnabled(true);
         outputs.put(defaultOutput.getId(), defaultOutput);
+
+        // Create delay processor for proxy mode
+        delayProcessor = new ProxyDelayProcessor(this);
 
         DataDirectory.createDirectories();
     }
@@ -97,6 +101,8 @@ public class OSCProxyService {
             return false;
         }
         outputs.put(output.getId(), output);
+        // Set the delay processor for this output
+        output.setDelayProcessor(delayProcessor);
         return true;
     }
 
@@ -157,8 +163,12 @@ public class OSCProxyService {
         stopProxy();
         inputService.start();
 
-        // Start all enabled outputs
+        // Start delay processor
+        delayProcessor.start();
+
+        // Start all enabled outputs and set their delay processor
         for (OSCOutputService output : outputs.values()) {
+            output.setDelayProcessor(delayProcessor);
             if (output.isEnabled()) {
                 output.start();
             }
@@ -168,6 +178,11 @@ public class OSCProxyService {
 
     public void stopProxy() {
         inputService.stop();
+
+        // Stop delay processor
+        if (delayProcessor != null) {
+            delayProcessor.stop();
+        }
 
         // Stop all outputs
         for (OSCOutputService output : outputs.values()) {

@@ -9,6 +9,7 @@ public class NodeRegistry {
         new IntToBangNode(),
         new PathTrimNode(),
         new DropNode(),
+        new DelayNode(),
         new PassNode(),
         new ScriptNode(),
         new SplitterNode()

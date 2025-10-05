@@ -22,6 +22,7 @@ import javafx.scene.media.MediaPlayer;
 import xyz.theforks.model.MessageRequest;
 import xyz.theforks.model.OSCMessageRecord;
 import xyz.theforks.model.RecordingSession;
+import xyz.theforks.model.ScheduledMessage;
 import xyz.theforks.model.SessionSettings;
 import xyz.theforks.nodes.PlaybackContext;
 import xyz.theforks.service.OSCOutputService;
@@ -50,26 +51,6 @@ public class Playback implements PlaybackContext {
     private PriorityQueue<ScheduledMessage> messageQueue;
     private long playbackStartTime;
     private long sessionStartTime;
-
-    /**
-     * Internal class for scheduled messages with routing info
-     */
-    private static class ScheduledMessage implements Comparable<ScheduledMessage> {
-        final OSCMessageRecord record;
-        final long absoluteTimestamp;
-        final String targetOutputId;  // null = all enabled, specific = route to this output only
-
-        ScheduledMessage(OSCMessageRecord record, long absoluteTimestamp, String targetOutputId) {
-            this.record = record;
-            this.absoluteTimestamp = absoluteTimestamp;
-            this.targetOutputId = targetOutputId;
-        }
-
-        @Override
-        public int compareTo(ScheduledMessage other) {
-            return Long.compare(this.absoluteTimestamp, other.absoluteTimestamp);
-        }
-    }
 
     public Playback() {
         DataDirectory.createDirectories();
@@ -160,7 +141,8 @@ public class Playback implements PlaybackContext {
         String targetOutput = request.hasTargetOutput() ?
             request.getTargetOutputId() : outputId;
 
-        ScheduledMessage scheduled = new ScheduledMessage(record, absoluteTime, targetOutput);
+        // Store the delay that was applied so we can pass it back when re-processing
+        ScheduledMessage scheduled = new ScheduledMessage(record, absoluteTime, targetOutput, request.getDelayMs());
 
         synchronized(messageQueue) {
             messageQueue.offer(scheduled);
@@ -189,7 +171,7 @@ public class Playback implements PlaybackContext {
             // Initialize message queue with all session messages
             messageQueue = new PriorityQueue<>();
             for (OSCMessageRecord msg : session.getMessages()) {
-                messageQueue.offer(new ScheduledMessage(msg, msg.getTimestamp(), null));
+                messageQueue.offer(new ScheduledMessage(msg, msg.getTimestamp(), null, 0));
             }
 
             System.out.println("Playing session: " + sessionName
@@ -251,7 +233,7 @@ public class Playback implements PlaybackContext {
                                 }
                             }
 
-                            sessionStartTime = scheduled.absoluteTimestamp;
+                            sessionStartTime = scheduled.getAbsoluteTimestamp();
                             playbackStartTime = System.currentTimeMillis();
                             firstMessage = false;
                             System.out.println("Playing first message");
@@ -263,35 +245,35 @@ public class Playback implements PlaybackContext {
                         Platform.runLater(() -> playbackProgress.set(progress));
 
                         try {
-                            if (scheduled.record != null && scheduled.record.getAddress() != null && scheduled.record.getArguments() != null) {
+                            if (scheduled.getRecord() != null && scheduled.getRecord().getAddress() != null && scheduled.getRecord().getArguments() != null) {
                                 // Calculate delay and sleep
-                                long delay = scheduled.absoluteTimestamp - sessionStartTime;
+                                long delay = scheduled.getAbsoluteTimestamp() - sessionStartTime;
                                 Thread.sleep(Math.max(0, delay - (System.currentTimeMillis() - playbackStartTime)));
 
                                 // Create OSC message
                                 OSCMessage oscMsg = new OSCMessage(
-                                    scheduled.record.getAddress(),
-                                    List.of(scheduled.record.getArguments())
+                                    scheduled.getRecord().getAddress(),
+                                    List.of(scheduled.getRecord().getArguments())
                                 );
 
                                 // Route based on targetOutputId
-                                if (scheduled.targetOutputId != null) {
+                                if (scheduled.getTargetOutputId() != null) {
                                     // Send to specific output only
-                                    OSCOutputService targetOutput = proxyService.getOutput(scheduled.targetOutputId);
+                                    OSCOutputService targetOutput = proxyService.getOutput(scheduled.getTargetOutputId());
                                     if (targetOutput != null) {
-                                        sendToOutput(targetOutput, oscMsg, scheduled.targetOutputId);
+                                        sendToOutput(targetOutput, oscMsg, scheduled.getTargetOutputId(), scheduled.getPreviousDelay());
                                     }
                                 } else if (targetOutputId != null) {
                                     // Playback is configured for specific output
                                     OSCOutputService targetOutput = proxyService.getOutput(targetOutputId);
                                     if (targetOutput != null) {
-                                        sendToOutput(targetOutput, oscMsg, targetOutputId);
+                                        sendToOutput(targetOutput, oscMsg, targetOutputId, scheduled.getPreviousDelay());
                                     }
                                 } else {
                                     // Send to all enabled outputs
                                     for (OSCOutputService output : proxyService.getOutputs()) {
                                         if (output.isEnabled()) {
-                                            sendToOutput(output, oscMsg, output.getId());
+                                            sendToOutput(output, oscMsg, output.getId(), scheduled.getPreviousDelay());
                                         }
                                     }
                                 }
@@ -332,17 +314,25 @@ public class Playback implements PlaybackContext {
     /**
      * Send message to a specific output, processing through its node chain with playback context.
      */
-    private void sendToOutput(OSCOutputService output, OSCMessage message, String outputId) {
+    private void sendToOutput(OSCOutputService output, OSCMessage message, String outputId, long previousDelay) {
         try {
-            // Process through output's node chain with playback context
-            List<MessageRequest> requests = output.getNodeChain().processMessage(message, this);
+            System.out.println("sendToOutput: " + message.getAddress() + " previousDelay=" + previousDelay);
 
+            // Process through output's node chain with playback context and previousDelay
+            List<MessageRequest> requests = output.getNodeChain().processMessage(message, this, previousDelay);
+
+            System.out.println("sendToOutput: After node chain, got " + requests.size() + " requests");
             for (MessageRequest req : requests) {
+                System.out.println("  Request: delayMs=" + req.getDelayMs() +
+                                 " previousDelay=" + req.getPreviousDelay() +
+                                 " isImmediate=" + req.isImmediate());
                 if (req.isImmediate()) {
                     // Send immediately
-                    output.send(req.getMessage(), true);  // bypass enabled check
+                    System.out.println("  -> Sending immediately to " + outputId);
+                    output.send(req.getMessage(), true, true);  // bypass enabled check AND node chain
                 } else {
                     // Schedule delayed message
+                    System.out.println("  -> Scheduling delayed message");
                     scheduleDelayedMessage(req, outputId);
                 }
             }

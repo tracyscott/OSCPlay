@@ -49,9 +49,20 @@ public class NodeChain {
      * @return List of message requests (may be empty to drop, or multiple for expansion)
      */
     public List<MessageRequest> processMessage(OSCMessage message, PlaybackContext playbackContext) {
+        return processMessage(message, playbackContext, 0);
+    }
+
+    /**
+     * Process message with optional playback context and previous delay tracking.
+     * @param message The original OSC message
+     * @param playbackContext Optional context for playback operations (null for non-playback)
+     * @param previousDelay Delay previously applied to this message (0 if none)
+     * @return List of message requests (may be empty to drop, or multiple for expansion)
+     */
+    public List<MessageRequest> processMessage(OSCMessage message, PlaybackContext playbackContext, long previousDelay) {
         if (!enabled || message == null) {
             List<MessageRequest> result = new ArrayList<>(1);
-            result.add(new MessageRequest(message));
+            result.add(new MessageRequest(message, 0, null, previousDelay));
             return result;
         }
 
@@ -64,15 +75,17 @@ public class NodeChain {
                 debugWindow.addRawMessage(message);
             }
 
-            // Create working list with initial message
+            // Create working list with initial message including previousDelay
             List<MessageRequest> requests = new ArrayList<>();
-            requests.add(new MessageRequest(message));
+            requests.add(new MessageRequest(message, 0, null, previousDelay));
 
             // Process through each node
             for (OSCNode node : nodes) {
                 // We need to process each request separately and collect results
                 // because a node might need to expand some requests but not others
                 List<MessageRequest> nextRequests = new ArrayList<>();
+
+                System.out.println("Processing node: " + node.label() + " with " + requests.size() + " messages");
 
                 for (MessageRequest req : requests) {
                     String address = req.getMessage().getAddress();
