@@ -105,6 +105,7 @@ public class OSCProxyApp extends Application {
     private static String outHost = "127.0.0.1";
     private static int outPort = 3030;
     private static boolean cliMode = false;
+    private static String projectToLoad = null;
 
     // Add fields
     private NodeChainManager nodeChainManager;
@@ -138,6 +139,11 @@ public class OSCProxyApp extends Application {
                         }
                     }
                     break;
+                case "--project":
+                    if (i + 1 < args.length) {
+                        projectToLoad = args[++i];
+                    }
+                    break;
                 case "--help":
                     printUsage();
                     System.exit(0);
@@ -159,14 +165,21 @@ public class OSCProxyApp extends Application {
         // Load application version
         loadAppVersion();
 
-        // Show splash screen for project selection
-        ProjectSplashScreen splashScreen = new ProjectSplashScreen();
-        String selectedProjectName = splashScreen.showAndWait();
+        // Determine which project to load
+        String selectedProjectName;
+        if (projectToLoad != null) {
+            // Use project specified from command line, skip splash screen
+            selectedProjectName = projectToLoad;
+        } else {
+            // Show splash screen for project selection
+            ProjectSplashScreen splashScreen = new ProjectSplashScreen();
+            selectedProjectName = splashScreen.showAndWait();
 
-        // Exit if user cancelled
-        if (selectedProjectName == null) {
-            Platform.exit();
-            return;
+            // Exit if user cancelled
+            if (selectedProjectName == null) {
+                Platform.exit();
+                return;
+            }
         }
 
         // Initialize project manager and load selected project
@@ -1322,6 +1335,7 @@ public class OSCProxyApp extends Application {
     private static void printUsage() {
         System.out.println("Usage: java -jar osc-play.jar [options]");
         System.out.println("Options:");
+        System.out.println("  --project <name>    Load specified project, skip splash screen");
         System.out.println("  --session <name>    Play specified session and exit");
         System.out.println("  --host <hostname>   Playback host (default: 127.0.0.1)");
         System.out.println("  --port <port>       Playback port (default: 9000)");

@@ -29,6 +29,10 @@ OSCPlay is a Java-based OSC (Open Sound Control) proxy server that captures, rec
 
 Download the latest from the [Releases](../../releases) page.
 
+### Running
+Running from the command line supports a --project MyProject argument that will bypass
+the project selection splash screen for unattended and auto-starting installations.
+
 
 ## How It Works
 
