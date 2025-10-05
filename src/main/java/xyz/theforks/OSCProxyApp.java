@@ -800,9 +800,10 @@ public class OSCProxyApp extends Application {
         // Don't clear sampler pads - reloadConfiguration() will overwrite them
         // Clearing causes a race condition where the async clear overwrites the loaded config
 
-        // Reset recording editor to "New" with empty table
+        // Reset recording editor to "New" with empty table, then refresh the recordings list
         if (recordingEditorUI != null) {
             recordingEditorUI.resetToNew();
+            recordingEditorUI.refreshRecordingsList();
         }
     }
 
