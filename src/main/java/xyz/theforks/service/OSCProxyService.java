@@ -24,7 +24,7 @@ import xyz.theforks.util.DataDirectory;
 public class OSCProxyService {
 
     private OSCInputService inputService;
-    private final Map<String, OSCOutputService> outputs;
+    private final Map<String, OutputService> outputs;
     private RecordingSession currentSession;
     private boolean isRecording = false;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -79,15 +79,26 @@ public class OSCProxyService {
      * @param id The output ID
      * @return The output service, or null if not found
      */
-    public OSCOutputService getOutput(String id) {
+    public OutputService getOutput(String id) {
         return outputs.get(id);
+    }
+
+    /**
+     * Get an OSC output service by ID (for backward compatibility).
+     * Returns null if the output is not an OSC output.
+     * @param id The output ID
+     * @return The OSC output service, or null if not found or not OSC
+     */
+    public OSCOutputService getOSCOutput(String id) {
+        OutputService output = outputs.get(id);
+        return (output instanceof OSCOutputService) ? (OSCOutputService) output : null;
     }
 
     /**
      * Get all output services.
      * @return List of all output services
      */
-    public List<OSCOutputService> getOutputs() {
+    public List<OutputService> getOutputs() {
         return new ArrayList<>(outputs.values());
     }
 
@@ -96,7 +107,7 @@ public class OSCProxyService {
      * @param output The output service to add
      * @return true if added, false if ID already exists
      */
-    public boolean addOutput(OSCOutputService output) {
+    public boolean addOutput(OutputService output) {
         if (outputs.containsKey(output.getId())) {
             return false;
         }
@@ -115,7 +126,7 @@ public class OSCProxyService {
         if ("default".equals(id)) {
             return false; // Don't allow removing default output
         }
-        OSCOutputService output = outputs.remove(id);
+        OutputService output = outputs.remove(id);
         if (output != null) {
             output.stop();
             return true;
@@ -136,13 +147,13 @@ public class OSCProxyService {
             }
         }
         for (String id : idsToRemove) {
-            OSCOutputService output = outputs.remove(id);
+            OutputService output = outputs.remove(id);
             if (output != null) {
                 output.stop();
             }
         }
         // Clear the default output's node chain if it exists
-        OSCOutputService defaultOutput = outputs.get("default");
+        OutputService defaultOutput = outputs.get("default");
         if (defaultOutput != null) {
             defaultOutput.getNodeChain().getNodes().clear();
         }
@@ -192,7 +203,7 @@ public class OSCProxyService {
         delayProcessor.start();
 
         // Start all enabled outputs and set their delay processor
-        for (OSCOutputService output : outputs.values()) {
+        for (OutputService output : outputs.values()) {
             output.setDelayProcessor(delayProcessor);
             if (output.isEnabled()) {
                 output.start();
@@ -210,7 +221,7 @@ public class OSCProxyService {
         }
 
         // Stop all outputs
-        for (OSCOutputService output : outputs.values()) {
+        for (OutputService output : outputs.values()) {
             output.stop();
         }
         System.out.println("Proxy stopped");
@@ -237,7 +248,7 @@ public class OSCProxyService {
 
             // Send to all enabled outputs
             // Each output applies its own node chain
-            for (OSCOutputService output : outputs.values()) {
+            for (OutputService output : outputs.values()) {
                 if (output.isEnabled() && output.isStarted()) {
                     output.send(oscMessage);
                 }
@@ -394,7 +405,7 @@ public class OSCProxyService {
      * @return The output's node chain, or null if output not found
      */
     public NodeChain getNodeChain(String outputId) {
-        OSCOutputService output = outputs.get(outputId);
+        OutputService output = outputs.get(outputId);
         return output != null ? output.getNodeChain() : null;
     }
 
@@ -415,7 +426,7 @@ public class OSCProxyService {
      * @param node The node to register
      */
     public void registerNode(String outputId, OSCNode node) {
-        OSCOutputService output = outputs.get(outputId);
+        OutputService output = outputs.get(outputId);
         if (output != null) {
             output.getNodeChain().registerNode(node);
         }
@@ -438,7 +449,7 @@ public class OSCProxyService {
      * @param node The node to unregister
      */
     public void unregisterNode(String outputId, OSCNode node) {
-        OSCOutputService output = outputs.get(outputId);
+        OutputService output = outputs.get(outputId);
         if (output != null) {
             output.getNodeChain().unregisterNode(node);
         }
@@ -459,7 +470,7 @@ public class OSCProxyService {
      * @param outputId The output ID
      */
     public void clearNodes(String outputId) {
-        OSCOutputService output = outputs.get(outputId);
+        OutputService output = outputs.get(outputId);
         if (output != null) {
             output.getNodeChain().clearNodes();
         }
@@ -482,7 +493,7 @@ public class OSCProxyService {
      * @param nodes The new list of nodes
      */
     public void setNodes(String outputId, List<OSCNode> nodes) {
-        OSCOutputService output = outputs.get(outputId);
+        OutputService output = outputs.get(outputId);
         if (output != null) {
             output.getNodeChain().setNodes(nodes);
         }

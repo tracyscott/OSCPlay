@@ -8,8 +8,11 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
+import xyz.theforks.model.OutputType;
+import xyz.theforks.service.MIDIOutputService;
 import xyz.theforks.service.OSCOutputService;
 import xyz.theforks.service.OSCProxyService;
+import xyz.theforks.service.OutputService;
 import xyz.theforks.ui.Theme;
 
 /**
@@ -81,8 +84,16 @@ public class MultiOutputManager {
 
     private void updateOutputsList() {
         outputsList.getItems().clear();
-        for (OSCOutputService output : proxyService.getOutputs()) {
+        for (OutputService output : proxyService.getOutputs()) {
             String displayName = output.getId();
+
+            // Add type indicator
+            if (output instanceof MIDIOutputService) {
+                displayName += " (MIDI)";
+            } else if (output instanceof OSCOutputService) {
+                displayName += " (OSC)";
+            }
+
             if (!output.isEnabled()) {
                 displayName += " [DISABLED]";
             }
@@ -91,9 +102,9 @@ public class MultiOutputManager {
     }
 
     private void addOutput() {
-        Dialog<OSCOutputService> dialog = new Dialog<>();
+        Dialog<OutputService> dialog = new Dialog<>();
         dialog.setTitle("Add Output");
-        dialog.setHeaderText("Configure new OSC output");
+        dialog.setHeaderText("Configure new output");
 
         // Set up dialog buttons
         ButtonType addButtonType = new ButtonType("Add", ButtonBar.ButtonData.OK_DONE);
@@ -105,20 +116,70 @@ public class MultiOutputManager {
         grid.setVgap(10);
         grid.setPadding(new Insets(20, 150, 10, 10));
 
+        // Output type selection
+        ToggleGroup typeGroup = new ToggleGroup();
+        RadioButton oscRadio = new RadioButton("OSC");
+        RadioButton midiRadio = new RadioButton("MIDI");
+        oscRadio.setToggleGroup(typeGroup);
+        midiRadio.setToggleGroup(typeGroup);
+        oscRadio.setSelected(true);
+
+        HBox typeBox = new HBox(10, oscRadio, midiRadio);
+
+        // Common fields
         TextField idField = new TextField();
         idField.setPromptText("unique-id");
-        TextField hostField = new TextField("127.0.0.1");
-        TextField portField = new TextField("3030");
-        CheckBox enabledCheckBox = new CheckBox("Proxy");
+        CheckBox enabledCheckBox = new CheckBox("Enabled");
         enabledCheckBox.setSelected(true);
 
-        grid.add(new Label("ID:"), 0, 0);
-        grid.add(idField, 1, 0);
-        grid.add(new Label("Host:"), 0, 1);
-        grid.add(hostField, 1, 1);
-        grid.add(new Label("Port:"), 0, 2);
-        grid.add(portField, 1, 2);
-        grid.add(enabledCheckBox, 1, 3);
+        // OSC-specific fields
+        TextField hostField = new TextField("127.0.0.1");
+        TextField portField = new TextField("3030");
+        Label hostLabel = new Label("Host:");
+        Label portLabel = new Label("Port:");
+
+        // MIDI-specific fields
+        ComboBox<String> midiDeviceCombo = new ComboBox<>();
+        midiDeviceCombo.getItems().addAll(MIDIOutputService.getAvailableMIDIDevices());
+        if (!midiDeviceCombo.getItems().isEmpty()) {
+            midiDeviceCombo.getSelectionModel().selectFirst();
+        }
+        Label midiDeviceLabel = new Label("MIDI Device:");
+
+        // Add common fields to grid
+        int row = 0;
+        grid.add(new Label("Type:"), 0, row);
+        grid.add(typeBox, 1, row++);
+        grid.add(new Label("ID:"), 0, row);
+        grid.add(idField, 1, row++);
+
+        // Initially show OSC fields
+        grid.add(hostLabel, 0, row);
+        grid.add(hostField, 1, row++);
+        grid.add(portLabel, 0, row);
+        grid.add(portField, 1, row++);
+        grid.add(enabledCheckBox, 1, row++);
+
+        // Handle type selection changes
+        typeGroup.selectedToggleProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal == oscRadio) {
+                // Show OSC fields, hide MIDI fields
+                grid.getChildren().removeAll(midiDeviceLabel, midiDeviceCombo);
+                if (!grid.getChildren().contains(hostLabel)) {
+                    grid.add(hostLabel, 0, 2);
+                    grid.add(hostField, 1, 2);
+                    grid.add(portLabel, 0, 3);
+                    grid.add(portField, 1, 3);
+                }
+            } else if (newVal == midiRadio) {
+                // Show MIDI fields, hide OSC fields
+                grid.getChildren().removeAll(hostLabel, hostField, portLabel, portField);
+                if (!grid.getChildren().contains(midiDeviceLabel)) {
+                    grid.add(midiDeviceLabel, 0, 2);
+                    grid.add(midiDeviceCombo, 1, 2);
+                }
+            }
+        });
 
         dialog.getDialogPane().setContent(grid);
         Theme.applyDark(dialog.getDialogPane().getScene());
@@ -129,24 +190,39 @@ public class MultiOutputManager {
         // Convert result when Add button is clicked
         dialog.setResultConverter(dialogButton -> {
             if (dialogButton == addButtonType) {
-                try {
-                    String id = idField.getText().trim();
-                    String host = hostField.getText().trim();
-                    int port = Integer.parseInt(portField.getText().trim());
+                String id = idField.getText().trim();
 
-                    if (id.isEmpty()) {
-                        showError("ID cannot be empty");
+                if (id.isEmpty()) {
+                    showError("ID cannot be empty");
+                    return null;
+                }
+
+                if (oscRadio.isSelected()) {
+                    try {
+                        String host = hostField.getText().trim();
+                        int port = Integer.parseInt(portField.getText().trim());
+
+                        OSCOutputService output = new OSCOutputService(id);
+                        output.setOutHost(host);
+                        output.setOutPort(port);
+                        output.setEnabled(enabledCheckBox.isSelected());
+                        return output;
+                    } catch (NumberFormatException e) {
+                        showError("Invalid port number");
+                        return null;
+                    }
+                } else {
+                    // MIDI output
+                    String deviceName = midiDeviceCombo.getSelectionModel().getSelectedItem();
+                    if (deviceName == null || deviceName.isEmpty()) {
+                        showError("Please select a MIDI device");
                         return null;
                     }
 
-                    OSCOutputService output = new OSCOutputService(id);
-                    output.setOutHost(host);
-                    output.setOutPort(port);
+                    MIDIOutputService output = new MIDIOutputService(id);
+                    output.setMidiDeviceName(deviceName);
                     output.setEnabled(enabledCheckBox.isSelected());
                     return output;
-                } catch (NumberFormatException e) {
-                    showError("Invalid port number");
-                    return null;
                 }
             }
             return null;
@@ -174,10 +250,12 @@ public class MultiOutputManager {
             return;
         }
 
-        // Extract ID from display string (remove [DISABLED] suffix if present)
-        String selectedId = selectedDisplay.replace(" [DISABLED]", "");
+        // Extract ID from display string (remove type indicator and [DISABLED] suffix)
+        String selectedId = selectedDisplay.replace(" (OSC)", "")
+                                          .replace(" (MIDI)", "")
+                                          .replace(" [DISABLED]", "");
 
-        OSCOutputService output = proxyService.getOutput(selectedId);
+        OutputService output = proxyService.getOutput(selectedId);
         if (output == null) {
             return;
         }
@@ -194,31 +272,82 @@ public class MultiOutputManager {
         grid.setVgap(10);
         grid.setPadding(new Insets(20, 150, 10, 10));
 
-        TextField hostField = new TextField(output.getOutHost());
-        TextField portField = new TextField(String.valueOf(output.getOutPort()));
-        CheckBox enabledCheckBox = new CheckBox("Proxy");
+        int row = 0;
+
+        // ID (non-editable)
+        grid.add(new Label("ID:"), 0, row);
+        grid.add(new Label(output.getId()), 1, row++);
+
+        // Type (non-editable)
+        String typeStr = output instanceof MIDIOutputService ? "MIDI" : "OSC";
+        grid.add(new Label("Type:"), 0, row);
+        grid.add(new Label(typeStr), 1, row++);
+
+        CheckBox enabledCheckBox = new CheckBox("Enabled");
         enabledCheckBox.setSelected(output.isEnabled());
 
-        grid.add(new Label("ID:"), 0, 0);
-        grid.add(new Label(output.getId()), 1, 0);
-        grid.add(new Label("Host:"), 0, 1);
-        grid.add(hostField, 1, 1);
-        grid.add(new Label("Port:"), 0, 2);
-        grid.add(portField, 1, 2);
-        grid.add(enabledCheckBox, 1, 3);
+        if (output instanceof OSCOutputService) {
+            OSCOutputService oscOutput = (OSCOutputService) output;
 
-        dialog.getDialogPane().setContent(grid);
-        Theme.applyDark(dialog.getDialogPane().getScene());
+            TextField hostField = new TextField(oscOutput.getOutHost());
+            TextField portField = new TextField(String.valueOf(oscOutput.getOutPort()));
 
-        dialog.setResultConverter(dialogButton -> {
-            if (dialogButton == saveButtonType) {
-                try {
-                    String host = hostField.getText().trim();
-                    int port = Integer.parseInt(portField.getText().trim());
+            grid.add(new Label("Host:"), 0, row);
+            grid.add(hostField, 1, row++);
+            grid.add(new Label("Port:"), 0, row);
+            grid.add(portField, 1, row++);
+            grid.add(enabledCheckBox, 1, row++);
 
-                    output.setOutHost(host);
-                    output.setOutPort(port);
-                    output.setEnabled(enabledCheckBox.isSelected());
+            dialog.getDialogPane().setContent(grid);
+            Theme.applyDark(dialog.getDialogPane().getScene());
+
+            dialog.setResultConverter(dialogButton -> {
+                if (dialogButton == saveButtonType) {
+                    try {
+                        String host = hostField.getText().trim();
+                        int port = Integer.parseInt(portField.getText().trim());
+
+                        oscOutput.setOutHost(host);
+                        oscOutput.setOutPort(port);
+                        oscOutput.setEnabled(enabledCheckBox.isSelected());
+
+                        updateOutputsList();
+                        if (onOutputsChanged != null) {
+                            onOutputsChanged.run();
+                        }
+                        if (onSaveConfig != null) {
+                            onSaveConfig.run();
+                        }
+                    } catch (NumberFormatException e) {
+                        showError("Invalid port number");
+                    }
+                }
+                return null;
+            });
+        } else if (output instanceof MIDIOutputService) {
+            MIDIOutputService midiOutput = (MIDIOutputService) output;
+
+            ComboBox<String> midiDeviceCombo = new ComboBox<>();
+            midiDeviceCombo.getItems().addAll(MIDIOutputService.getAvailableMIDIDevices());
+            midiDeviceCombo.getSelectionModel().select(midiOutput.getMidiDeviceName());
+
+            grid.add(new Label("MIDI Device:"), 0, row);
+            grid.add(midiDeviceCombo, 1, row++);
+            grid.add(enabledCheckBox, 1, row++);
+
+            dialog.getDialogPane().setContent(grid);
+            Theme.applyDark(dialog.getDialogPane().getScene());
+
+            dialog.setResultConverter(dialogButton -> {
+                if (dialogButton == saveButtonType) {
+                    String deviceName = midiDeviceCombo.getSelectionModel().getSelectedItem();
+                    if (deviceName == null || deviceName.isEmpty()) {
+                        showError("Please select a MIDI device");
+                        return null;
+                    }
+
+                    midiOutput.setMidiDeviceName(deviceName);
+                    midiOutput.setEnabled(enabledCheckBox.isSelected());
 
                     updateOutputsList();
                     if (onOutputsChanged != null) {
@@ -227,12 +356,10 @@ public class MultiOutputManager {
                     if (onSaveConfig != null) {
                         onSaveConfig.run();
                     }
-                } catch (NumberFormatException e) {
-                    showError("Invalid port number");
                 }
-            }
-            return null;
-        });
+                return null;
+            });
+        }
 
         dialog.showAndWait();
     }
@@ -244,8 +371,10 @@ public class MultiOutputManager {
             return;
         }
 
-        // Extract ID from display string (remove [DISABLED] suffix if present)
-        String selectedId = selectedDisplay.replace(" [DISABLED]", "");
+        // Extract ID from display string (remove type indicator and [DISABLED] suffix)
+        String selectedId = selectedDisplay.replace(" (OSC)", "")
+                                          .replace(" (MIDI)", "")
+                                          .replace(" [DISABLED]", "");
 
         if ("default".equals(selectedId)) {
             showError("Cannot remove default output");

@@ -26,6 +26,7 @@ import xyz.theforks.model.ScheduledMessage;
 import xyz.theforks.model.SessionSettings;
 import xyz.theforks.nodes.PlaybackContext;
 import xyz.theforks.service.OSCOutputService;
+import xyz.theforks.service.OutputService;
 import xyz.theforks.service.OSCProxyService;
 import xyz.theforks.util.DataDirectory;
 
@@ -259,19 +260,19 @@ public class Playback implements PlaybackContext {
                                 // Route based on targetOutputId
                                 if (scheduled.getTargetOutputId() != null) {
                                     // Send to specific output only
-                                    OSCOutputService targetOutput = proxyService.getOutput(scheduled.getTargetOutputId());
+                                    OutputService targetOutput = proxyService.getOutput(scheduled.getTargetOutputId());
                                     if (targetOutput != null) {
                                         sendToOutput(targetOutput, oscMsg, scheduled.getTargetOutputId(), scheduled.getPreviousDelay());
                                     }
                                 } else if (targetOutputId != null) {
                                     // Playback is configured for specific output
-                                    OSCOutputService targetOutput = proxyService.getOutput(targetOutputId);
+                                    OutputService targetOutput = proxyService.getOutput(targetOutputId);
                                     if (targetOutput != null) {
                                         sendToOutput(targetOutput, oscMsg, targetOutputId, scheduled.getPreviousDelay());
                                     }
                                 } else {
                                     // Send to all enabled outputs
-                                    for (OSCOutputService output : proxyService.getOutputs()) {
+                                    for (OutputService output : proxyService.getOutputs()) {
                                         if (output.isEnabled()) {
                                             sendToOutput(output, oscMsg, output.getId(), scheduled.getPreviousDelay());
                                         }
@@ -314,7 +315,7 @@ public class Playback implements PlaybackContext {
     /**
      * Send message to a specific output, processing through its node chain with playback context.
      */
-    private void sendToOutput(OSCOutputService output, OSCMessage message, String outputId, long previousDelay) {
+    private void sendToOutput(OutputService output, OSCMessage message, String outputId, long previousDelay) {
         try {
             // System.out.println("sendToOutput: " + message.getAddress() + " previousDelay=" + previousDelay);
 

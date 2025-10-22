@@ -39,6 +39,7 @@ import xyz.theforks.Playback;
 import xyz.theforks.nodes.OSCNode;
 import xyz.theforks.nodes.NodeRegistry;
 import xyz.theforks.service.OSCOutputService;
+import xyz.theforks.service.OutputService;
 import xyz.theforks.service.OSCProxyService;
 import xyz.theforks.service.ProjectManager;
 import xyz.theforks.ui.Theme;
@@ -115,7 +116,7 @@ public class NodeChainManager {
      */
     private void syncNodesFromOutput() {
         activeNodes.clear();
-        OSCOutputService output = proxyService.getOutput(outputId);
+        OutputService output = proxyService.getOutput(outputId);
         if (output != null) {
             List<OSCNode> nodes = output.getNodeChain().getNodes();
             activeNodes.addAll(nodes);
@@ -128,7 +129,7 @@ public class NodeChainManager {
      * This should be called whenever the order or enabled state changes.
      */
     private void rebuildNodeChain() {
-        OSCOutputService output = proxyService.getOutput(outputId);
+        OutputService output = proxyService.getOutput(outputId);
         if (output != null) {
             // Clear the node chain
             output.getNodeChain().clearNodes();
@@ -747,7 +748,7 @@ public class NodeChainManager {
         currentDebugWindow = new NodeChainDebugWindow(outputId);
 
         // Set the debug window on the output service's node chain
-        OSCOutputService output = proxyService.getOutput(outputId);
+        OutputService output = proxyService.getOutput(outputId);
         if (output != null) {
             output.getNodeChain().setDebugWindow(currentDebugWindow);
         }

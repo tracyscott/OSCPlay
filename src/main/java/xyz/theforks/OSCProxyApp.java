@@ -728,18 +728,35 @@ public class OSCProxyApp extends Application {
                 log("initializeOutputsFromProject: Loading output: " + outputConfig.getId());
                 if ("default".equals(outputConfig.getId())) {
                     // Update the existing default output
-                    OSCOutputService defaultOutput = proxyService.getOutput("default");
-                    if (defaultOutput != null) {
+                    // Note: default output is always OSC for backward compatibility
+                    xyz.theforks.service.OutputService defaultOutputService = proxyService.getOutput("default");
+                    if (defaultOutputService instanceof xyz.theforks.service.OSCOutputService) {
+                        xyz.theforks.service.OSCOutputService defaultOutput = (xyz.theforks.service.OSCOutputService) defaultOutputService;
                         defaultOutput.setOutHost(outputConfig.getHost());
                         defaultOutput.setOutPort(outputConfig.getPort());
                         defaultOutput.setEnabled(outputConfig.isEnabled());
                         loadNodeChainForOutput(defaultOutput, outputConfig.getNodeChain());
                     }
                 } else {
-                    OSCOutputService output = new OSCOutputService(outputConfig.getId());
-                    output.setOutHost(outputConfig.getHost());
-                    output.setOutPort(outputConfig.getPort());
-                    output.setEnabled(outputConfig.isEnabled());
+                    xyz.theforks.service.OutputService output;
+                    xyz.theforks.model.OutputType outputType = outputConfig.getOutputType() != null ?
+                        outputConfig.getOutputType() : xyz.theforks.model.OutputType.OSC;
+
+                    if (outputType == xyz.theforks.model.OutputType.MIDI) {
+                        // Create MIDI output
+                        xyz.theforks.service.MIDIOutputService midiOutput = new xyz.theforks.service.MIDIOutputService(outputConfig.getId());
+                        midiOutput.setMidiDeviceName(outputConfig.getMidiDeviceName());
+                        midiOutput.setEnabled(outputConfig.isEnabled());
+                        output = midiOutput;
+                    } else {
+                        // Create OSC output
+                        xyz.theforks.service.OSCOutputService oscOutput = new xyz.theforks.service.OSCOutputService(outputConfig.getId());
+                        oscOutput.setOutHost(outputConfig.getHost());
+                        oscOutput.setOutPort(outputConfig.getPort());
+                        oscOutput.setEnabled(outputConfig.isEnabled());
+                        output = oscOutput;
+                    }
+
                     proxyService.addOutput(output);
                     loadNodeChainForOutput(output, outputConfig.getNodeChain());
                 }
@@ -910,14 +927,35 @@ public class OSCProxyApp extends Application {
 
             // Save outputs
             project.getOutputs().clear();
-            for (OSCOutputService output : proxyService.getOutputs()) {
-                OutputConfig outputConfig = new OutputConfig(
-                        output.getId(),
-                        output.getOutHost(),
-                        output.getOutPort(),
-                        output.isEnabled(),
-                        saveNodeChainForOutput(output)
-                );
+            for (xyz.theforks.service.OutputService output : proxyService.getOutputs()) {
+                OutputConfig outputConfig;
+
+                if (output instanceof xyz.theforks.service.MIDIOutputService) {
+                    xyz.theforks.service.MIDIOutputService midiOutput = (xyz.theforks.service.MIDIOutputService) output;
+                    outputConfig = new OutputConfig(
+                            midiOutput.getId(),
+                            xyz.theforks.model.OutputType.MIDI,
+                            null,  // host
+                            0,     // port
+                            midiOutput.getMidiDeviceName(),
+                            midiOutput.isEnabled(),
+                            saveNodeChainForOutput(output)
+                    );
+                } else if (output instanceof xyz.theforks.service.OSCOutputService) {
+                    xyz.theforks.service.OSCOutputService oscOutput = (xyz.theforks.service.OSCOutputService) output;
+                    outputConfig = new OutputConfig(
+                            oscOutput.getId(),
+                            xyz.theforks.model.OutputType.OSC,
+                            oscOutput.getOutHost(),
+                            oscOutput.getOutPort(),
+                            null,  // midiDeviceName
+                            oscOutput.isEnabled(),
+                            saveNodeChainForOutput(output)
+                    );
+                } else {
+                    continue;  // Unknown output type
+                }
+
                 project.addOrUpdateOutput(outputConfig);
             }
         }
@@ -1233,7 +1271,7 @@ public class OSCProxyApp extends Application {
         String currentSelection = outputComboBox.getSelectionModel().getSelectedItem();
         outputComboBox.getItems().clear();
 
-        for (OSCOutputService output : proxyService.getOutputs()) {
+        for (xyz.theforks.service.OutputService output : proxyService.getOutputs()) {
             outputComboBox.getItems().add(output.getId());
         }
 
@@ -1252,7 +1290,7 @@ public class OSCProxyApp extends Application {
             playbackOutputComboBox.getItems().clear();
             playbackOutputComboBox.getItems().add("Proxy");
 
-            for (OSCOutputService output : proxyService.getOutputs()) {
+            for (xyz.theforks.service.OutputService output : proxyService.getOutputs()) {
                 playbackOutputComboBox.getItems().add(output.getId());
             }
 
@@ -1419,7 +1457,7 @@ public class OSCProxyApp extends Application {
     /**
      * Load and apply a node chain configuration to an output.
      */
-    private void loadNodeChainForOutput(OSCOutputService output, NodeChainConfig chainConfig) {
+    private void loadNodeChainForOutput(xyz.theforks.service.OutputService output, NodeChainConfig chainConfig) {
         if (chainConfig == null || chainConfig.getNodes() == null) {
             return;
         }
@@ -1452,14 +1490,35 @@ public class OSCProxyApp extends Application {
     public void saveOutputsToConfig() {
         appConfig.getOutputs().clear();
 
-        for (OSCOutputService output : proxyService.getOutputs()) {
-            OutputConfig outputConfig = new OutputConfig(
-                    output.getId(),
-                    output.getOutHost(),
-                    output.getOutPort(),
-                    output.isEnabled(),
-                    saveNodeChainForOutput(output)
-            );
+        for (xyz.theforks.service.OutputService output : proxyService.getOutputs()) {
+            OutputConfig outputConfig;
+
+            if (output instanceof xyz.theforks.service.MIDIOutputService) {
+                xyz.theforks.service.MIDIOutputService midiOutput = (xyz.theforks.service.MIDIOutputService) output;
+                outputConfig = new OutputConfig(
+                        midiOutput.getId(),
+                        xyz.theforks.model.OutputType.MIDI,
+                        null,  // host
+                        0,     // port
+                        midiOutput.getMidiDeviceName(),
+                        midiOutput.isEnabled(),
+                        saveNodeChainForOutput(output)
+                );
+            } else if (output instanceof xyz.theforks.service.OSCOutputService) {
+                xyz.theforks.service.OSCOutputService oscOutput = (xyz.theforks.service.OSCOutputService) output;
+                outputConfig = new OutputConfig(
+                        oscOutput.getId(),
+                        xyz.theforks.model.OutputType.OSC,
+                        oscOutput.getOutHost(),
+                        oscOutput.getOutPort(),
+                        null,  // midiDeviceName
+                        oscOutput.isEnabled(),
+                        saveNodeChainForOutput(output)
+                );
+            } else {
+                continue;  // Unknown output type
+            }
+
             appConfig.addOrUpdateOutput(outputConfig);
         }
 
@@ -1469,7 +1528,7 @@ public class OSCProxyApp extends Application {
     /**
      * Save the node chain of an output to configuration format.
      */
-    private NodeChainConfig saveNodeChainForOutput(OSCOutputService output) {
+    private NodeChainConfig saveNodeChainForOutput(xyz.theforks.service.OutputService output) {
         NodeChainConfig chainConfig = new NodeChainConfig();
         List<OSCNode> nodes = output.getNodeChain().getNodes();
 

@@ -10,7 +10,7 @@ import com.illposed.osc.transport.OSCPortOutBuilder;
 import xyz.theforks.nodes.NodeChain;
 import xyz.theforks.ui.MonitorWindow;
 
-public class OSCOutputService {
+public class OSCOutputService implements OutputService {
     private final String id;
     private OSCPortOut sender;
     private String outHost;

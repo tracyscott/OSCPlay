@@ -153,13 +153,13 @@ public class ProxyDelayProcessor {
             // Route based on targetOutputId
             if (scheduled.getTargetOutputId() != null) {
                 // Send to specific output only
-                OSCOutputService targetOutput = proxyService.getOutput(scheduled.getTargetOutputId());
+                OutputService targetOutput = proxyService.getOutput(scheduled.getTargetOutputId());
                 if (targetOutput != null) {
                     sendToOutput(targetOutput, oscMsg, scheduled.getTargetOutputId(), scheduled.getPreviousDelay());
                 }
             } else {
                 // Send to all enabled outputs
-                for (OSCOutputService output : proxyService.getOutputs()) {
+                for (OutputService output : proxyService.getOutputs()) {
                     if (output.isEnabled()) {
                         sendToOutput(output, oscMsg, output.getId(), scheduled.getPreviousDelay());
                     }
@@ -174,7 +174,7 @@ public class ProxyDelayProcessor {
     /**
      * Send message to a specific output, processing through its node chain.
      */
-    private void sendToOutput(OSCOutputService output, OSCMessage message, String outputId, long previousDelay) {
+    private void sendToOutput(OutputService output, OSCMessage message, String outputId, long previousDelay) {
         try {
             // System.out.println("ProxyDelayProcessor: sendToOutput: " + message.getAddress() +
             //                  " previousDelay=" + previousDelay);

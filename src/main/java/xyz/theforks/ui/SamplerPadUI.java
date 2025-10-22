@@ -761,7 +761,7 @@ public class SamplerPadUI extends VBox {
 
     private void updateOutputRouteComboBox(ComboBox<String> comboBox) {
         // Add all available outputs from the proxy service
-        for (xyz.theforks.service.OSCOutputService output : proxyService.getOutputs()) {
+        for (xyz.theforks.service.OutputService output : proxyService.getOutputs()) {
             if (!comboBox.getItems().contains(output.getId())) {
                 comboBox.getItems().add(output.getId());
             }
