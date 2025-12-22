@@ -66,6 +66,7 @@ public class OSCProxyApp extends Application {
     // UI Components
     private TextField inHostField;
     private TextField inPortField;
+    private ComboBox<String> inProtocolCombo;
     private Label inMessageCountLabel;
     private TextField outHostField;
     private TextField outPortField;
@@ -106,6 +107,7 @@ public class OSCProxyApp extends Application {
     private static int outPort = 3030;
     private static boolean cliMode = false;
     private static String projectToLoad = null;
+    private static boolean useTcp = false;
 
     // Add fields
     private NodeChainManager nodeChainManager;
@@ -143,6 +145,9 @@ public class OSCProxyApp extends Application {
                     if (i + 1 < args.length) {
                         projectToLoad = args[++i];
                     }
+                    break;
+                case "--tcp":
+                    useTcp = true;
                     break;
                 case "--help":
                     printUsage();
@@ -240,23 +245,33 @@ public class OSCProxyApp extends Application {
         inLabel.setMinWidth(20);
         proxyGrid.add(inLabel, 0, 0);
 
-        // Load input host and port from project config
+        // Load input host, port, and protocol from project config
         ProjectConfig project = projectManager.getCurrentProject();
         String initialInHost = project != null ? project.getInHost() : "127.0.0.1";
         int initialInPort = project != null ? project.getInPort() : 8000;
+        String initialInProtocol = project != null ? project.getInProtocol() : "UDP";
 
         inHostField = new TextField(initialInHost);
-        inHostField.setMinWidth(200);  // Doubled from 250
+        inHostField.setMinWidth(200);
         inHostField.setStyle("-fx-font-size: 11px;");
         proxyGrid.add(inHostField, 1, 0);
         inPortField = new TextField(String.valueOf(initialInPort));
-        inPortField.setMaxWidth(200);  // Doubled from 100
+        inPortField.setMaxWidth(80);
         inPortField.setStyle("-fx-font-size: 11px;");
         proxyGrid.add(inPortField, 2, 0);
+
+        // Protocol dropdown (UDP/TCP)
+        inProtocolCombo = new ComboBox<>();
+        inProtocolCombo.getItems().addAll("UDP", "TCP");
+        inProtocolCombo.setValue(initialInProtocol);
+        inProtocolCombo.setStyle("-fx-font-size: 11px;");
+        inProtocolCombo.setMaxWidth(70);
+        proxyGrid.add(inProtocolCombo, 3, 0);
+
         inMessageCountLabel = new Label("0");
         inMessageCountLabel.setStyle("-fx-text-fill: #888888; -fx-font-size: 11px;");
         inMessageCountLabel.setMinWidth(40);
-        proxyGrid.add(inMessageCountLabel, 3, 0);
+        proxyGrid.add(inMessageCountLabel, 4, 0);
 
         // Output selection and management (row 1)
         HBox outputSelectionBox = new HBox(10);
@@ -530,10 +545,17 @@ public class OSCProxyApp extends Application {
         try {
             proxyService.setInHost(inHostField.getText());
             proxyService.setInPort(Integer.parseInt(inPortField.getText()));
+            // Use TCP if CLI flag is set OR if UI dropdown says TCP
+            boolean isTcp = useTcp || "TCP".equals(inProtocolCombo.getValue());
+            if (useTcp && !"TCP".equals(inProtocolCombo.getValue())) {
+                // CLI --tcp flag overrides UI, update the combo to match
+                inProtocolCombo.setValue("TCP");
+            }
+            proxyService.setUseTcp(isTcp);
             proxyService.setOutHost(outHostField.getText());
             proxyService.setOutPort(Integer.parseInt(outPortField.getText()));
             proxyService.startProxy();
-            log("Proxy started automatically");
+            log("Proxy started automatically (" + inProtocolCombo.getValue() + ")");
         } catch (Exception ex) {
             showError("Error starting proxy", ex.getMessage());
             log("Error: " + ex.getMessage());
@@ -848,10 +870,10 @@ public class OSCProxyApp extends Application {
             log("loadProjectConfiguration: Selected output: " + selectedOutputId);
         }
 
-        // Load input host and port from project
+        // Load input host, port, and protocol from project
         ProjectConfig project = projectManager.getCurrentProject();
         if (project != null) {
-            log("loadProjectConfiguration: Setting input fields - host:" + project.getInHost() + " port:" + project.getInPort());
+            log("loadProjectConfiguration: Setting input fields - host:" + project.getInHost() + " port:" + project.getInPort() + " protocol:" + project.getInProtocol());
             if (inHostField != null) {
                 inHostField.setText(project.getInHost());
                 inHostField.setStyle("-fx-font-size: 11px;"); // Clear edited styling
@@ -859,6 +881,9 @@ public class OSCProxyApp extends Application {
             if (inPortField != null) {
                 inPortField.setText(String.valueOf(project.getInPort()));
                 inPortField.setStyle("-fx-font-size: 11px;"); // Clear edited styling
+            }
+            if (inProtocolCombo != null) {
+                inProtocolCombo.setValue(project.getInProtocol());
             }
         }
 
@@ -900,13 +925,14 @@ public class OSCProxyApp extends Application {
             // Save playback mode (always WITH_REWRITE now)
             project.setPlaybackMode(PlaybackMode.WITH_REWRITE);
 
-            // Save input host and port
+            // Save input host, port, and protocol
             project.setInHost(inHostField.getText());
             try {
                 project.setInPort(Integer.parseInt(inPortField.getText()));
             } catch (NumberFormatException e) {
                 // Keep existing port if field has invalid value
             }
+            project.setInProtocol(inProtocolCombo.getValue());
 
             // Save outputs
             project.getOutputs().clear();
@@ -1053,6 +1079,11 @@ public class OSCProxyApp extends Application {
         setupFieldEditFeedback(outHostField);
         setupFieldEditFeedback(outPortField);
 
+        // Protocol dropdown change handler
+        inProtocolCombo.setOnAction(e -> {
+            restartProxyWithNewSettings(inProtocolCombo);
+        });
+
         // Output selection handler
         outputComboBox.setOnAction(e -> {
             String selected = outputComboBox.getSelectionModel().getSelectedItem();
@@ -1140,6 +1171,7 @@ public class OSCProxyApp extends Application {
             // Update input settings from UI fields
             proxyService.setInHost(inHostField.getText());
             proxyService.setInPort(Integer.parseInt(inPortField.getText()));
+            proxyService.setUseTcp("TCP".equals(inProtocolCombo.getValue()));
 
             // Update selected output settings from UI fields
             OSCOutputService output = proxyService.getOutput(selectedOutputId);
@@ -1152,7 +1184,7 @@ public class OSCProxyApp extends Application {
             proxyService.startProxy();
 
             log("Proxy started - In: " + inHostField.getText() + ":" + inPortField.getText() +
-                " Out[" + selectedOutputId + "]: " + outHostField.getText() + ":" + outPortField.getText());
+                " (" + inProtocolCombo.getValue() + ") Out[" + selectedOutputId + "]: " + outHostField.getText() + ":" + outPortField.getText());
         } catch (Exception ex) {
             String errorMsg = "Failed to start proxy: " + ex.getMessage();
             log("ERROR: " + errorMsg);
@@ -1169,35 +1201,12 @@ public class OSCProxyApp extends Application {
         final String errorStyle = baseStyle + " -fx-border-color: #FF0000; -fx-border-width: 2px;";
 
         try {
-            // Stop the current proxy (safe to call even if not running)
-            proxyService.stopProxy();
-
-            // Update input settings
-            proxyService.setInHost(inHostField.getText());
-            proxyService.setInPort(Integer.parseInt(inPortField.getText()));
-
-            // Update selected output settings
-            OSCOutputService output = proxyService.getOutput(selectedOutputId);
-            if (output != null) {
-                output.setOutHost(outHostField.getText());
-                output.setOutPort(Integer.parseInt(outPortField.getText()));
-            }
-
-            proxyService.startProxy();
-
-            log("Proxy started - In: " + inHostField.getText() + ":" + inPortField.getText() +
-                " Out[" + selectedOutputId + "]: " + outHostField.getText() + ":" + outPortField.getText());
-
+            restartProxy();
             // Clear any error styling on all proxy fields
             inHostField.setStyle(baseStyle);
             inPortField.setStyle(baseStyle);
             outHostField.setStyle(baseStyle);
             outPortField.setStyle(baseStyle);
-
-            statusBar.setText("");
-
-            // Save updated configuration
-            saveOutputsToConfig();
         } catch (NumberFormatException ex) {
             String errorMsg = "Invalid port number: " + changedField.getText();
             log("ERROR: " + errorMsg);
@@ -1209,6 +1218,50 @@ public class OSCProxyApp extends Application {
             statusBar.setText(errorMsg);
             changedField.setStyle(errorStyle);
         }
+    }
+
+    /**
+     * Restarts the proxy with new settings (for non-TextField controls like ComboBox).
+     */
+    private <T> void restartProxyWithNewSettings(ComboBox<T> changedControl) {
+        try {
+            restartProxy();
+        } catch (Exception ex) {
+            String errorMsg = "Failed to start proxy: " + ex.getMessage();
+            log("ERROR: " + errorMsg);
+            statusBar.setText(errorMsg);
+        }
+    }
+
+    /**
+     * Common proxy restart logic.
+     */
+    private void restartProxy() throws Exception {
+        // Stop the current proxy (safe to call even if not running)
+        proxyService.stopProxy();
+
+        // Update input settings including protocol
+        proxyService.setInHost(inHostField.getText());
+        proxyService.setInPort(Integer.parseInt(inPortField.getText()));
+        proxyService.setUseTcp("TCP".equals(inProtocolCombo.getValue()));
+
+        // Update selected output settings
+        OSCOutputService output = proxyService.getOutput(selectedOutputId);
+        if (output != null) {
+            output.setOutHost(outHostField.getText());
+            output.setOutPort(Integer.parseInt(outPortField.getText()));
+        }
+
+        proxyService.startProxy();
+
+        String protocol = inProtocolCombo.getValue();
+        log("Proxy started - In: " + inHostField.getText() + ":" + inPortField.getText() +
+            " (" + protocol + ") Out[" + selectedOutputId + "]: " + outHostField.getText() + ":" + outPortField.getText());
+
+        statusBar.setText("");
+
+        // Save updated configuration
+        saveOutputsToConfig();
     }
 
     private void updatePlaybackStatus(double progress) {
@@ -1340,6 +1393,7 @@ public class OSCProxyApp extends Application {
         System.out.println("  --session <name>    Play specified session and exit");
         System.out.println("  --host <hostname>   Playback host (default: 127.0.0.1)");
         System.out.println("  --port <port>       Playback port (default: 9000)");
+        System.out.println("  --tcp               Use TCP instead of UDP for input");
         System.out.println("  --help              Show this help message");
     }
 

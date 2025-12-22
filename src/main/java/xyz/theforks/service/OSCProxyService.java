@@ -164,6 +164,10 @@ public class OSCProxyService {
         inputService.setInHost(host);
     }
 
+    public void setUseTcp(boolean useTcp) {
+        inputService.setUseTcp(useTcp);
+    }
+
     /**
      * Set output host for default output (backward compatibility).
      */

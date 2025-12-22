@@ -16,6 +16,7 @@ public class ProjectConfig {
     private String midiDeviceName;
     private String inHost;
     private int inPort;
+    private String inProtocol;  // "UDP" or "TCP", defaults to "UDP"
 
     public ProjectConfig() {
         this.projectName = "Untitled";
@@ -26,6 +27,7 @@ public class ProjectConfig {
         this.midiDeviceName = null;
         this.inHost = "127.0.0.1";
         this.inPort = 8000;
+        this.inProtocol = "UDP";
     }
 
     @JsonCreator
@@ -36,7 +38,8 @@ public class ProjectConfig {
             @JsonProperty("midiMappings") java.util.Map<Integer, String> midiMappings,
             @JsonProperty("midiDeviceName") String midiDeviceName,
             @JsonProperty("inHost") String inHost,
-            @JsonProperty("inPort") Integer inPort) {
+            @JsonProperty("inPort") Integer inPort,
+            @JsonProperty("inProtocol") String inProtocol) {
         this.projectName = projectName != null ? projectName : "Untitled";
         this.playbackMode = playbackMode != null ? playbackMode : PlaybackMode.WITHOUT_REWRITE;
         this.outputs = outputs != null ? outputs : new java.util.ArrayList<>();
@@ -44,6 +47,7 @@ public class ProjectConfig {
         this.midiDeviceName = midiDeviceName;
         this.inHost = inHost != null ? inHost : "127.0.0.1";
         this.inPort = inPort != null ? inPort : 8000;
+        this.inProtocol = inProtocol != null ? inProtocol : "UDP";  // Default to UDP for backward compatibility
         if (this.outputs.isEmpty() || !hasOutput("default")) {
             this.outputs.add(0, createDefaultOutput());
         }
@@ -145,5 +149,13 @@ public class ProjectConfig {
 
     public void setInPort(int inPort) {
         this.inPort = inPort;
+    }
+
+    public String getInProtocol() {
+        return inProtocol != null ? inProtocol : "UDP";
+    }
+
+    public void setInProtocol(String inProtocol) {
+        this.inProtocol = inProtocol;
     }
 }
