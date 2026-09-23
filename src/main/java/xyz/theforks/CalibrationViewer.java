@@ -16,7 +16,10 @@ import javafx.scene.shape.Sphere;
 import javafx.scene.transform.Rotate;
 import javafx.scene.transform.Translate;
 import javafx.stage.Stage;
-import xyz.theforks.nodes.InterlaceMagNode;
+import xyz.theforks.calibration.Calibration;
+import xyz.theforks.calibration.CalibrationSample;
+import xyz.theforks.calibration.CurveModel;
+import xyz.theforks.calibration.LabeledPoint;
 import xyz.theforks.ui.Theme;
 
 public class CalibrationViewer {
@@ -37,7 +40,12 @@ public class CalibrationViewer {
     private static final double ROTATION_SPEED = 2.0;
     private static final double TRACK_SPEED = 0.3;
 
-    public void show(InterlaceMagNode node, String title) {
+    /**
+     * Show a 3D calibration: recorded samples (red), the fitted curve (blue) and labeled points (yellow).
+     */
+    public void show(Calibration calibration, String title) {
+        CurveModel model = calibration.getFittedModel() instanceof CurveModel
+            ? (CurveModel) calibration.getFittedModel() : null;
         Stage stage = new Stage();
         stage.setTitle(title);
 
@@ -68,9 +76,12 @@ public class CalibrationViewer {
         addCoordinateAxes();
 
         // Calculate scale factor and center point
-        List<double[]> calibrationData = node.getCalibrationData();
+        List<double[]> calibrationData = new ArrayList<>();
+        for (CalibrationSample sample : calibration.getSamples()) {
+            calibrationData.add(sample.getValues());
+        }
         double[] min = {Double.MAX_VALUE, Double.MAX_VALUE, Double.MAX_VALUE};
-        double[] max = {Double.MIN_VALUE, Double.MIN_VALUE, Double.MIN_VALUE};
+        double[] max = {-Double.MAX_VALUE, -Double.MAX_VALUE, -Double.MAX_VALUE};
         
         for (double[] point : calibrationData) {
             for (int i = 0; i < 3; i++) {
@@ -101,23 +112,34 @@ public class CalibrationViewer {
             world.getChildren().add(sphere);
         }
 
-        // Add curve points
-        for (double t = 0; t <= 1.0; t += 0.01) {
-            double x = node.getSplineX().value(t);
-            double y = node.getSplineY().value(t);
-            double z = node.getSplineZ().value(t);
-            
-            Sphere sphere = new Sphere(1);
-            sphere.setTranslateX((x - center[0]) * scale);
-            sphere.setTranslateY((y - center[1]) * scale);
-            sphere.setTranslateZ((z - center[2]) * scale);
-            PhongMaterial material = new PhongMaterial(Color.BLUE);
-            sphere.setMaterial(material);
+        // Add labeled points (e.g. calibration marks)
+        for (LabeledPoint point : calibration.getPoints()) {
+            double[] v = point.getValues();
+            Sphere sphere = new Sphere(4);
+            sphere.setTranslateX((v[0] - center[0]) * scale);
+            sphere.setTranslateY((v[1] - center[1]) * scale);
+            sphere.setTranslateZ((v[2] - center[2]) * scale);
+            sphere.setMaterial(new PhongMaterial(Color.YELLOW));
             world.getChildren().add(sphere);
         }
 
-        // Add spline curve
-        addSplineCurve(node, center, scale);
+        if (model != null) {
+            // Add curve points
+            for (double t = 0; t <= 1.0; t += 0.01) {
+                double[] p = model.pointAt(t);
+
+                Sphere sphere = new Sphere(1);
+                sphere.setTranslateX((p[0] - center[0]) * scale);
+                sphere.setTranslateY((p[1] - center[1]) * scale);
+                sphere.setTranslateZ((p[2] - center[2]) * scale);
+                PhongMaterial material = new PhongMaterial(Color.BLUE);
+                sphere.setMaterial(material);
+                world.getChildren().add(sphere);
+            }
+
+            // Add spline curve
+            addSplineCurve(model, center, scale);
+        }
 
         // Initial camera rotation for better view
         cameraXform.rx.setAngle(20);
@@ -170,16 +192,17 @@ public class CalibrationViewer {
     }
 
     // Add this method to CalibrationViewer class
-    private void addSplineCurve(InterlaceMagNode node, double[] center, double scale) {
+    private void addSplineCurve(CurveModel model, double[] center, double scale) {
         // Create a group for the curve segments
         Group curveGroup = new Group();
         
         // Sample points along the curve
         List<Point3D> points = new ArrayList<>();
         for (double t = 0; t <= 1.0; t += 0.005) { // Smaller step for smoother curve
-            double x = (node.getSplineX().value(t) - center[0]) * scale;
-            double y = (node.getSplineY().value(t) - center[1]) * scale;
-            double z = (node.getSplineZ().value(t) - center[2]) * scale;
+            double[] p = model.pointAt(t);
+            double x = (p[0] - center[0]) * scale;
+            double y = (p[1] - center[1]) * scale;
+            double z = (p[2] - center[2]) * scale;
             points.add(new Point3D(x, y, z));
         }
 

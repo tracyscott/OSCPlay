@@ -46,11 +46,13 @@ import xyz.theforks.model.PlaybackMode;
 import xyz.theforks.model.ProjectConfig;
 import xyz.theforks.model.RecordingSession;
 import xyz.theforks.nodes.OSCNode;
+import xyz.theforks.nodes.CalibrateNode;
 import xyz.theforks.nodes.ScriptNode;
 import xyz.theforks.service.OSCInputService;
 import xyz.theforks.service.OSCOutputService;
 import xyz.theforks.service.OSCProxyService;
 import xyz.theforks.service.ProjectManager;
+import xyz.theforks.ui.CalibrationWindow;
 import xyz.theforks.ui.MonitorWindow;
 import xyz.theforks.ui.ProjectSplashScreen;
 import xyz.theforks.ui.RecordingEditorUI;
@@ -92,6 +94,7 @@ public class OSCProxyApp extends Application {
     private CheckBox enableOutputCheckBox;
     private Button monitorButton;
     private MonitorWindow currentMonitorWindow;
+    private CalibrationWindow calibrationWindow;
     private String selectedOutputId = "default";
     
     
@@ -206,6 +209,7 @@ public class OSCProxyApp extends Application {
 
             // Set the project manager for ScriptNode instances
             ScriptNode.setProjectManager(projectManager);
+            CalibrateNode.setProjectManager(projectManager);
         } catch (IOException e) {
             showError("Error loading project", e.getMessage());
             Platform.exit();
@@ -589,6 +593,20 @@ public class OSCProxyApp extends Application {
         fileMenu.getItems().addAll(newProjectItem, openProjectItem, saveProjectItem, saveAsProjectItem,
                 new SeparatorMenuItem(), quitItem);
         menuBar.getMenus().add(fileMenu);
+
+        // Tools menu
+        Menu toolsMenu = new Menu("Tools");
+
+        MenuItem calibrationItem = new MenuItem("Sensor Calibration...");
+        calibrationItem.setOnAction(e -> {
+            if (calibrationWindow == null || !calibrationWindow.isShowing()) {
+                calibrationWindow = new CalibrationWindow(projectManager, proxyService);
+            }
+            calibrationWindow.show();
+        });
+
+        toolsMenu.getItems().add(calibrationItem);
+        menuBar.getMenus().add(toolsMenu);
 
         // Help menu
         Menu helpMenu = new Menu("Help");

@@ -18,6 +18,7 @@ import java.nio.file.Paths;
  * - Recordings/ - directory for recorded sessions
  * - NodeChains/ - directory for node chain configurations
  * - Scripts/ - directory for JavaScript files used by ScriptNode
+ * - Calibrations/ - directory for sensor calibrations used by CalibrateNode
  */
 public class ProjectManager {
 
@@ -27,6 +28,7 @@ public class ProjectManager {
     private static final String RECORDINGS_DIR = "Recordings";
     private static final String NODECHAINS_DIR = "NodeChains";
     private static final String SCRIPTS_DIR = "Scripts";
+    private static final String CALIBRATIONS_DIR = "Calibrations";
 
     private final ObjectMapper mapper = new ObjectMapper();
     private AppSettings appSettings;
@@ -100,6 +102,7 @@ public class ProjectManager {
         Files.createDirectories(projectDir.resolve(RECORDINGS_DIR));
         Files.createDirectories(projectDir.resolve(NODECHAINS_DIR));
         Files.createDirectories(projectDir.resolve(SCRIPTS_DIR));
+        Files.createDirectories(projectDir.resolve(CALIBRATIONS_DIR));
 
         // Create project config file
         ProjectConfig config = new ProjectConfig();
@@ -162,6 +165,7 @@ public class ProjectManager {
         Files.createDirectories(newProjectDir.resolve(RECORDINGS_DIR));
         Files.createDirectories(newProjectDir.resolve(NODECHAINS_DIR));
         Files.createDirectories(newProjectDir.resolve(SCRIPTS_DIR));
+        Files.createDirectories(newProjectDir.resolve(CALIBRATIONS_DIR));
 
         // Update project name and save
         currentProject.setProjectName(newProjectName);
@@ -211,6 +215,7 @@ public class ProjectManager {
         Files.createDirectories(currentProjectPath.resolve(RECORDINGS_DIR));
         Files.createDirectories(currentProjectPath.resolve(NODECHAINS_DIR));
         Files.createDirectories(currentProjectPath.resolve(SCRIPTS_DIR));
+        Files.createDirectories(currentProjectPath.resolve(CALIBRATIONS_DIR));
     }
 
     /**
@@ -269,5 +274,22 @@ public class ProjectManager {
             throw new IllegalStateException("No project is currently open");
         }
         return currentProjectPath.resolve(SCRIPTS_DIR);
+    }
+
+    /**
+     * Get the calibrations directory for the current project.
+     */
+    public Path getCalibrationsDir() {
+        if (currentProjectPath == null) {
+            throw new IllegalStateException("No project is currently open");
+        }
+        return currentProjectPath.resolve(CALIBRATIONS_DIR);
+    }
+
+    /**
+     * Get the calibrations directory for a project by name, without opening it.
+     */
+    public static Path getCalibrationsDir(String projectName) {
+        return getProjectsDir().resolve(projectName).resolve(CALIBRATIONS_DIR);
     }
 }

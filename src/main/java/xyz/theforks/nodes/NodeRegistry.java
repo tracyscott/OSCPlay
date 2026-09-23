@@ -11,7 +11,9 @@ public class NodeRegistry {
         new DelayNode(),
         new PassNode(),
         new ScriptNode(),
-        new SplitterNode()
+        new SplitterNode(),
+        new CalibrateNode(),
+        new InterlaceMagNode()
     };
 
     public static OSCNode[] getNodes() {

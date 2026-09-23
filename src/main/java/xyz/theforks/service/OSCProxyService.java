@@ -17,6 +17,7 @@ import javafx.beans.property.IntegerProperty;
 import javafx.beans.property.SimpleIntegerProperty;
 import xyz.theforks.model.OSCMessageRecord;
 import xyz.theforks.model.RecordingSession;
+import xyz.theforks.nodes.CalibrateNode;
 import xyz.theforks.nodes.NodeChain;
 import xyz.theforks.nodes.OSCNode;
 import xyz.theforks.util.DataDirectory;
@@ -383,6 +384,19 @@ public class OSCProxyService {
         Platform.runLater(() -> messageCount.set(messageCount.get() + 1));
     }
     
+    /**
+     * Re-load a calibration in every output's node chain that uses it.
+     * @param name The calibration name
+     * @return Number of nodes reloaded
+     */
+    public int reloadCalibration(String name) {
+        int reloaded = 0;
+        for (OSCOutputService output : getOutputs()) {
+            reloaded += CalibrateNode.reloadCalibration(output.getNodeChain().getNodes(), name);
+        }
+        return reloaded;
+    }
+
     /**
      * Get the node chain for the default output (backward compatibility).
      * @return The default output's node chain
