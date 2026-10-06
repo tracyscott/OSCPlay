@@ -119,7 +119,8 @@ public class OSCProxyApp extends Application {
     private static boolean cliMode = false;
     private static String projectToLoad = null;
     private static boolean useTcp = false;
-    private static boolean mcpOnStartup = false;
+    /** The MCP server runs by default; --no-mcp turns it off. */
+    private static boolean mcpOnStartup = true;
     private static int mcpPort = McpServer.DEFAULT_PORT;
 
     // Add fields
@@ -165,7 +166,11 @@ public class OSCProxyApp extends Application {
                     useTcp = true;
                     break;
                 case "--mcp":
+                    // The default, kept so existing scripts and shortcuts still work.
                     mcpOnStartup = true;
+                    break;
+                case "--no-mcp":
+                    mcpOnStartup = false;
                     break;
                 case "--mcp-port":
                     if (i + 1 < args.length) {
@@ -1566,7 +1571,8 @@ public class OSCProxyApp extends Application {
         System.out.println("  --host <hostname>   Playback host (default: 127.0.0.1)");
         System.out.println("  --port <port>       Playback port (default: 9000)");
         System.out.println("  --tcp               Use TCP instead of UDP for input");
-        System.out.println("  --mcp               Start the MCP server for agents (http://127.0.0.1:" + McpServer.DEFAULT_PORT + "/mcp)");
+        System.out.println("  --mcp               Start the MCP server for agents (the default; http://127.0.0.1:" + McpServer.DEFAULT_PORT + "/mcp)");
+        System.out.println("  --no-mcp            Do not start the MCP server");
         System.out.println("  --mcp-port <port>   Start the MCP server on this port");
         System.out.println("  --help              Show this help message");
     }

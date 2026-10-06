@@ -30,7 +30,8 @@ if "%OSCPLAY_DIR%"=="" set OSCPLAY_DIR=%~dp0
 rem %~dp0 ends in a backslash; a hand-set OSCPLAY_DIR might not.
 if not "%OSCPLAY_DIR:~-1%"=="\" set OSCPLAY_DIR=%OSCPLAY_DIR%\
 
-rem Extra options, e.g. --mcp to allow agents to connect on port 7770.
+rem Extra options. The MCP server for agents already runs by default on port
+rem 7770; pass --no-mcp here to turn it off.
 set EXTRA_OPTS=
 
 rem Where to record what happened, so a failed boot can be diagnosed.

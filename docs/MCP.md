@@ -4,13 +4,14 @@ OSCPlay has a built-in [Model Context Protocol](https://modelcontextprotocol.io)
 
 ## Starting it
 
-The server is off by default. Turn it on in either of these ways:
+The server runs by default, so an agent can connect without anyone turning it on first. It listens on `127.0.0.1` only, and rejects requests whose `Origin` is not local.
 
-- **Tools > MCP Server** in the menu
-- start OSCPlay with `--mcp`. Add `--mcp-port <port>` to use a port other than 7770.
+- Use `--mcp-port <port>` to listen on a port other than 7770.
+- Start OSCPlay with `--no-mcp` to leave it off, or untick **Tools > MCP Server** while it is running.
+- If the port is already taken, for example by a second copy of OSCPlay, the message is logged and shown in the status bar and the rest of the app carries on as normal.
 
 ```sh
-java -jar target/osc-play-*-shaded.jar --project MyProject --mcp
+java -jar target/osc-play-*-shaded.jar --project MyProject
 ```
 
 The log shows `MCP server listening at http://127.0.0.1:7770/mcp`. The server only listens on the loopback interface. It rejects browser requests from non-local origins.

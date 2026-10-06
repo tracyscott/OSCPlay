@@ -43,7 +43,7 @@ the project selection splash screen for unattended and auto-starting installatio
 
 ### Agent control (MCP)
 OSCPlay can run an MCP server so AI agents (Claude Code, etc.) can inspect and edit outputs
-and node chains while it runs. Start it with `--mcp` or **Tools > MCP Server**. See
+and node chains while it runs. It runs by default on `127.0.0.1:7770`; `--no-mcp` turns it off. See
 [docs/MCP.md](docs/MCP.md).
 
 
