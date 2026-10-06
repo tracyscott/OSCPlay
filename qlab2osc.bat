@@ -11,14 +11,18 @@ if "%JFX_SDK%"=="" (
 )
 
 REM Find the JAR file
+rem Find the JAR file. The version lives in pom.xml, so match it with a glob
+rem rather than hardcoding it here (preferring the shaded JAR, which bundles all
+rem dependencies).
 set JAR_FILE=
-if exist "target\osc-play-1.1-shaded.jar" (
-    set JAR_FILE=target\osc-play-1.1-shaded.jar
-) else if exist "osc-play-1.1-shaded.jar" (
-    set JAR_FILE=osc-play-1.1-shaded.jar
-) else (
-    echo Error: Could not find osc-play-1.1-shaded.jar
-    echo Please run 'mvn package' first to build the project.
+for %%f in (target\osc-play-*-shaded.jar) do set JAR_FILE=%%f
+if "%JAR_FILE%"=="" for %%f in (osc-play-*-shaded.jar) do set JAR_FILE=%%f
+if "%JAR_FILE%"=="" for %%f in (target\osc-play-*.jar) do set JAR_FILE=%%f
+if "%JAR_FILE%"=="" for %%f in (osc-play-*.jar) do set JAR_FILE=%%f
+
+if "%JAR_FILE%"=="" (
+    echo Error: Could not find an osc-play JAR file
+    echo Run 'mvn package' first to build target\osc-play-^<version^>-shaded.jar
     exit /b 1
 )
 

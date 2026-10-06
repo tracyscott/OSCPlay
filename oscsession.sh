@@ -1,6 +1,5 @@
 #!/bin/bash
 
-VERSION="1.1.1"
 
 # OSCSession - Non-interactive session playback
 # Usage: ./oscsession.sh <session_name> [additional_args]
@@ -16,23 +15,22 @@ fi
 SESSION_NAME="$1"
 shift # Remove session name from arguments, pass rest to java
 
-# Find the JAR file (prefer shaded JAR which has all dependencies bundled)
+# Find the JAR file. The version lives in pom.xml, so match it with a glob
+# rather than hardcoding it here (preferring the shaded JAR, which bundles all
+# dependencies).
 JAR_FILE=""
-if [ -f "target/osc-play-${VERSION}-shaded.jar" ]; then
-    JAR_FILE="target/osc-play-${VERSION}-shaded.jar"
-elif [ -f "osc-play-${VERSION}-shaded.jar" ]; then
-    JAR_FILE="osc-play-${VERSION}-shaded.jar"
-elif [ -f "target/osc-play-${VERSION}.jar" ]; then
-    JAR_FILE="target/osc-play-${VERSION}.jar"
-elif [ -f "osc-play-${VERSION}.jar" ]; then
-    JAR_FILE="osc-play-${VERSION}.jar"
-else
-    echo "Error: Could not find osc-play JAR file"
-    echo "Expected one of:"
-    echo "  target/osc-play-${VERSION}-shaded.jar"
-    echo "  osc-play-${VERSION}-shaded.jar"
-    echo "  target/osc-play-${VERSION}.jar"
-    echo "  osc-play-${VERSION}.jar"
+for pattern in target/osc-play-*-shaded.jar osc-play-*-shaded.jar target/osc-play-*.jar osc-play-*.jar; do
+    for candidate in $pattern; do
+        if [ -f "$candidate" ]; then
+            JAR_FILE="$candidate"
+            break 2
+        fi
+    done
+done
+
+if [ -z "$JAR_FILE" ]; then
+    echo "Error: Could not find an osc-play JAR file"
+    echo "Run 'mvn package' first to build target/osc-play-<version>-shaded.jar"
     exit 1
 fi
 

@@ -6,7 +6,7 @@
 
     <groupId>xyz.theforks</groupId>
     <artifactId>osc-play</artifactId>
-    <version>2.2.0</version>
+    <version>2.3.0</version>
 
     <properties>
         <maven.compiler.source>17</maven.compiler.source>
@@ -214,18 +214,6 @@
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-resources-plugin</artifactId>
-                <version>3.3.1</version>
-                <configuration>
-                    <nonFilteredFileExtensions>
-                        <nonFilteredFileExtension>icns</nonFilteredFileExtension>
-                        <nonFilteredFileExtension>ico</nonFilteredFileExtension>
-                        <nonFilteredFileExtension>png</nonFilteredFileExtension>
-                    </nonFilteredFileExtensions>
-                </configuration>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.11.0</version>
                 <configuration>
@@ -308,6 +296,44 @@
                     </execution>
                 </executions>
             </plugin>
+            <!-- Declared after the shade plugin so that, within the package phase,
+                 the shaded JAR already exists when it is staged for jpackage. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-resources-plugin</artifactId>
+                <version>3.3.1</version>
+                <configuration>
+                    <nonFilteredFileExtensions>
+                        <nonFilteredFileExtension>icns</nonFilteredFileExtension>
+                        <nonFilteredFileExtension>ico</nonFilteredFileExtension>
+                        <nonFilteredFileExtension>png</nonFilteredFileExtension>
+                    </nonFilteredFileExtensions>
+                </configuration>
+                <executions>
+                    <execution>
+                        <!-- Stage only the shaded JAR for jpackage. Pointing jpackage at
+                             target/ directly would copy classes/, test-classes/ and
+                             surefire-reports/ into the app bundle as well. -->
+                        <id>stage-jpackage-input</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>copy-resources</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}/jpackage-input</outputDirectory>
+                            <resources>
+                                <resource>
+                                    <directory>${project.build.directory}</directory>
+                                    <includes>
+                                        <include>${project.build.finalName}-shaded.jar</include>
+                                    </includes>
+                                    <filtering>false</filtering>
+                                </resource>
+                            </resources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
 
             <!-- JPackage Plugin for native installers -->
             <plugin>
@@ -329,7 +355,7 @@
                         <option>--add-exports</option>
                         <option>javafx.media/com.sun.media.jfxmedia=ALL-UNNAMED</option>
                     </javaOptions>
-                    <input>target</input>
+                    <input>target/jpackage-input</input>
                     <mainJar>osc-play-${project.version}-shaded.jar</mainJar>
                     <mainClass>xyz.theforks.Launcher</mainClass>
 

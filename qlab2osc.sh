@@ -11,21 +11,22 @@ if [ -z "$JFX_SDK" ]; then
     exit 1
 fi
 
-# Find the JAR file
+# Find the JAR file. The version lives in pom.xml, so match it with a glob
+# rather than hardcoding it here (preferring the shaded JAR, which bundles all
+# dependencies).
 JAR_FILE=""
-if [ -f "target/osc-play-1.1.1.jar" ]; then
-    JAR_FILE="target/osc-play-1.1.1.jar"
-elif [ -f "target/osc-play-1.1.1-jar-with-dependencies.jar" ]; then
-    JAR_FILE="target/osc-play-1.1.1-jar-with-dependencies.jar"
-elif [ -f "osc-play-1.1.1.jar" ]; then
-    JAR_FILE="osc-play-1.1.1.jar"
-elif [ -f "target/osc-play-1.1-shaded.jar" ]; then
-    JAR_FILE="target/osc-play-1.1-shaded.jar"
-elif [ -f "osc-play-1.1-shaded.jar" ]; then
-    JAR_FILE="osc-play-1.1-shaded.jar"
-else
-    echo "Error: Could not find OSC Play JAR file"
-    echo "Please run 'mvn package' first to build the project."
+for pattern in target/osc-play-*-shaded.jar osc-play-*-shaded.jar target/osc-play-*.jar osc-play-*.jar; do
+    for candidate in $pattern; do
+        if [ -f "$candidate" ]; then
+            JAR_FILE="$candidate"
+            break 2
+        fi
+    done
+done
+
+if [ -z "$JAR_FILE" ]; then
+    echo "Error: Could not find an osc-play JAR file"
+    echo "Run 'mvn package' first to build target/osc-play-<version>-shaded.jar"
     exit 1
 fi
 

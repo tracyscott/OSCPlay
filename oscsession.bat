@@ -1,7 +1,6 @@
 @echo off
 setlocal enabledelayedexpansion
 
-set VERSION=2.2.0
 
 rem OSCSession - Non-interactive session playback
 rem Usage: oscsession.bat <session_name> [additional_args]
@@ -30,20 +29,18 @@ if not exist "%JFX_SDK%" (
     exit /b 1
 )
 
-rem Find the JAR file
+rem Find the JAR file. The version lives in pom.xml, so match it with a glob
+rem rather than hardcoding it here (preferring the shaded JAR, which bundles all
+rem dependencies).
 set JAR_FILE=
-if exist "target\osc-play-%VERSION%.jar" (
-    set JAR_FILE=target\osc-play-%VERSION%.jar
-) else if exist "target\osc-play-%VERSION%-shaded.jar" (
-    set JAR_FILE=target\osc-play-%VERSION%-shaded.jar
-) else if exist "osc-play-%VERSION%.jar" (
-    set JAR_FILE=osc-play-%VERSION%.jar
-) else (
-    echo Error: Could not find osc-play JAR file
-    echo Expected one of:
-    echo   target\osc-play-%VERSION%.jar
-    echo   target\osc-play-%VERSION%-shaded.jar
-    echo   osc-play-%VERSION%.jar
+for %%f in (target\osc-play-*-shaded.jar) do set JAR_FILE=%%f
+if "%JAR_FILE%"=="" for %%f in (osc-play-*-shaded.jar) do set JAR_FILE=%%f
+if "%JAR_FILE%"=="" for %%f in (target\osc-play-*.jar) do set JAR_FILE=%%f
+if "%JAR_FILE%"=="" for %%f in (osc-play-*.jar) do set JAR_FILE=%%f
+
+if "%JAR_FILE%"=="" (
+    echo Error: Could not find an osc-play JAR file
+    echo Run 'mvn package' first to build target\osc-play-^<version^>-shaded.jar
     exit /b 1
 )
 

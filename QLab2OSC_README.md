@@ -20,10 +20,10 @@ The QLab2OSC Converter reads OSC recording sessions created by OSC Play and gene
 
 ```bash
 # Basic usage
-java -cp "target/osc-play-1.1.1-jar-with-dependencies.jar" xyz.theforks.QLab2OSCConverter <session-name>
+java -cp "target/osc-play-<version>-shaded.jar" xyz.theforks.QLab2OSCConverter <session-name>
 
 # With custom configuration
-java -cp "target/osc-play-1.1.1-jar-with-dependencies.jar" xyz.theforks.QLab2OSCConverter <session-name> --config my_config.json
+java -cp "target/osc-play-<version>-shaded.jar" xyz.theforks.QLab2OSCConverter <session-name> --config my_config.json
 ```
 
 ### Shell Scripts
