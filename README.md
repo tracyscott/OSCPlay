@@ -62,7 +62,7 @@ Requires Java 17 and Maven:
 
 ```bash
 mvn clean package
-java -jar target/osc-play-2.1.0-shaded.jar
+java -jar target/osc-play-2.2.0-shaded.jar
 ```
 
 ## Documentation
@@ -76,7 +76,7 @@ MIT License
 
 ## Version
 
-Current version: 2.1.0
+Current version: 2.2.0
 
 
 

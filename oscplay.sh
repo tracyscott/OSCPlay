@@ -1,6 +1,6 @@
 #!/bin/bash
 
-VERSION="2.1.0"
+VERSION="2.2.0"
 
 # OSCPlay - Interactive GUI mode
 # JavaFX dependencies are bundled in the shaded JAR - no separate SDK installation required
