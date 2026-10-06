@@ -146,6 +146,16 @@ Smooths messages that have exactly **one float32** argument. It outputs the mean
 {"type": "Moving Average", "args": ["/sensor/.*", "8"]}
 ```
 
+#### Remap Float — `RemapNodeF`
+Args: `Address Pattern`, `In Min`, `In Max`, `Out Min`, `Out Max`, `Clamp` (`true`/`false`)
+
+Linearly maps every numeric argument (float32, float64, int32, int64) from the input range onto the output range, always emitting **float32**. Non-numeric arguments pass through, and a message with nothing numeric is left untouched. With `Clamp` on, values outside the input range are held at the output ends; with it off they extrapolate. Reversing the output range inverts the signal. An `In Min` equal to `In Max` has no meaningful mapping and pins to `Out Min`.
+
+Typical use is matching a sensor's units to a parameter's: Chromatik's `Angles/angle1-3` are normalized parameters that LX applies with `setNormalized()`, so the Interlace Magnometer node's 0-270 degrees have to be scaled to 0-1 or they clamp at full deflection.
+```json
+{"type": "Remap Float", "args": ["/lx/modulation/Angles/angle[123]", "0", "270", "0", "1", "true"]}
+```
+
 #### IntToBang — `IntToBangNode`
 Args: `Address Pattern`
 

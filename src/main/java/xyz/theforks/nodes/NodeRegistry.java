@@ -5,6 +5,7 @@ public class NodeRegistry {
         new PitchShiftNode(),
         new RenameNode(),
         new MovingAvgNode(),
+        new RemapNodeF(),
         new IntToBangNode(),
         new PathTrimNode(),
         new DropNode(),
