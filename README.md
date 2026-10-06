@@ -30,7 +30,12 @@ OSCPlay is a Java-based OSC (Open Sound Control) proxy server that captures, rec
 
 ### Download
 
-Download the latest from the [Releases](../../releases) page.
+Download the latest installer for your platform from the [Releases](../../releases/latest) page:
+
+- **Windows**: `OSCPlay-<version>.exe`. Run the installer, which lets you choose an install folder and adds Start Menu and desktop shortcuts. The installer is unsigned, so Windows SmartScreen may warn you; click **More info** → **Run anyway**.
+- **macOS**: `OSCPlay-<version>.dmg`. Open the disk image and drag OSCPlay into Applications.
+
+Both installers bundle their own Java runtime, so no separate Java install is needed.
 
 ### Running
 Running from the command line supports a --project MyProject argument that will bypass
