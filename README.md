@@ -41,6 +41,11 @@ Both installers bundle their own Java runtime, so no separate Java install is ne
 Running from the command line supports a --project MyProject argument that will bypass
 the project selection splash screen for unattended and auto-starting installations.
 
+### Agent control (MCP)
+OSCPlay can run an MCP server so AI agents (Claude Code, etc.) can inspect and edit outputs
+and node chains while it runs. Start it with `--mcp` or **Tools > MCP Server**. See
+[docs/MCP.md](docs/MCP.md).
+
 
 ## How It Works
 

@@ -166,19 +166,65 @@ class SplitterNodeTest {
     @Test
     void testConfigureThrowsExceptionWithWrongArgCount() {
         assertThrows(IllegalArgumentException.class, () -> {
-            node.configure(new String[]{"unexpected"});
+            node.configure(new String[]{"/a", "/b"});
         });
     }
 
     @Test
-    void testGetters() {
+    void testConfigureRejectsInvalidPattern() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            node.configure(new String[]{"/foo["});
+        });
+    }
+
+    @Test
+    void testNoArgsOrBlankPatternMatchesEverything() {
+        // Chains saved before the pattern was added have no args
         node.configure(new String[]{});
+        assertEquals(".*", node.getAddressPattern());
+
+        node.configure(new String[]{"  "});
+        assertEquals(".*", node.getAddressPattern());
+    }
+
+    @Test
+    void testOnlySplitsMatchingAddresses() {
+        node.configure(new String[]{"/xy.*"});
+
+        List<MessageRequest> matching = new ArrayList<>();
+        matching.add(new MessageRequest(new OSCMessage("/xy", Arrays.asList(0.1f, 0.7f))));
+        node.process(matching);
+        assertEquals(2, matching.size());
+        assertEquals("/xy1", matching.get(0).getMessage().getAddress());
+        assertEquals("/xy2", matching.get(1).getMessage().getAddress());
+
+        OSCMessage other = new OSCMessage("/rgb", Arrays.asList(1, 2, 3));
+        List<MessageRequest> notMatching = new ArrayList<>();
+        notMatching.add(new MessageRequest(other));
+        node.process(notMatching);
+        assertEquals(1, notMatching.size());
+        assertSame(other, notMatching.get(0).getMessage());
+    }
+
+    @Test
+    void testPatternAppliedInChain() {
+        node.configure(new String[]{"/xy"});
+        NodeChain chain = new NodeChain(NodeChain.Context.PROXY);
+        chain.registerNode(node);
+
+        assertEquals(2, chain.processMessage(new OSCMessage("/xy", Arrays.asList(0.1f, 0.7f))).size());
+        assertEquals(1, chain.processMessage(new OSCMessage("/rgb", Arrays.asList(1, 2, 3))).size());
+    }
+
+    @Test
+    void testGetters() {
+        node.configure(new String[]{"/xy"});
 
         assertEquals("Splitter", node.label());
-        assertEquals(0, node.getNumArgs());
-        assertEquals(".*", node.getAddressPattern());
-        assertArrayEquals(new String[]{}, node.getArgs());
-        assertArrayEquals(new String[]{}, node.getArgNames());
+        assertEquals(1, node.getNumArgs());
+        assertEquals("/xy", node.getAddressPattern());
+        assertArrayEquals(new String[]{"/xy"}, node.getArgs());
+        assertArrayEquals(new String[]{"Address Pattern"}, node.getArgNames());
         assertNotNull(node.getHelp());
     }
 }

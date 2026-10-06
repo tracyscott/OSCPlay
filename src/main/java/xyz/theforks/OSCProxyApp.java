@@ -16,6 +16,7 @@ import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
+import javafx.scene.control.CheckMenuItem;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.Menu;
@@ -39,6 +40,9 @@ import javafx.scene.paint.Color;
 import javafx.stage.FileChooser;
 import javafx.stage.FileChooser.ExtensionFilter;
 import javafx.stage.Stage;
+import xyz.theforks.mcp.McpHost;
+import xyz.theforks.mcp.McpServer;
+import xyz.theforks.mcp.PipelineTools;
 import xyz.theforks.model.ApplicationConfig;
 import xyz.theforks.model.NodeChainConfig;
 import xyz.theforks.model.OutputConfig;
@@ -111,6 +115,8 @@ public class OSCProxyApp extends Application {
     private static boolean cliMode = false;
     private static String projectToLoad = null;
     private static boolean useTcp = false;
+    private static boolean mcpOnStartup = false;
+    private static int mcpPort = McpServer.DEFAULT_PORT;
 
     // Add fields
     private NodeChainManager nodeChainManager;
@@ -118,6 +124,8 @@ public class OSCProxyApp extends Application {
     private Stage primaryStage;
     private SamplerPadUI samplerPadUI;
     private RecordingEditorUI recordingEditorUI;
+    private McpServer mcpServer;
+    private CheckMenuItem mcpMenuItem;
 
     public static void main(String[] args) {
         // Parse command line arguments
@@ -151,6 +159,20 @@ public class OSCProxyApp extends Application {
                     break;
                 case "--tcp":
                     useTcp = true;
+                    break;
+                case "--mcp":
+                    mcpOnStartup = true;
+                    break;
+                case "--mcp-port":
+                    if (i + 1 < args.length) {
+                        try {
+                            mcpPort = Integer.parseInt(args[++i]);
+                            mcpOnStartup = true;
+                        } catch (NumberFormatException e) {
+                            System.err.println("Invalid MCP port number: " + args[i]);
+                            System.exit(1);
+                        }
+                    }
                     break;
                 case "--help":
                     printUsage();
@@ -228,6 +250,24 @@ public class OSCProxyApp extends Application {
 
         // Initialize outputs from project configuration (UI will be updated later)
         initializeOutputsFromProject();
+
+        // MCP server for agents; tool calls run on the FX thread like UI edits
+        mcpServer = new McpServer(
+                new PipelineTools(proxyService, projectManager, new McpHost() {
+                    @Override
+                    public void onPipelineChanged() {
+                        refreshAfterPipelineChange();
+                    }
+
+                    @Override
+                    public void saveProject() throws IOException {
+                        saveProjectConfiguration();
+                        projectManager.saveProject();
+                        log("Saved project via MCP: " + projectManager.getCurrentProjectName());
+                    }
+                }),
+                Platform::runLater,
+                appVersion);
 
         // Create menu bar
         MenuBar menuBar = createMenuBar(primaryStage);
@@ -564,6 +604,44 @@ public class OSCProxyApp extends Application {
             showError("Error starting proxy", ex.getMessage());
             log("Error: " + ex.getMessage());
         }
+
+        if (mcpOnStartup) {
+            setMcpServerRunning(true);
+        }
+    }
+
+    /**
+     * Start or stop the MCP server and keep the Tools menu checkbox in sync.
+     */
+    private void setMcpServerRunning(boolean running) {
+        if (running) {
+            try {
+                mcpServer.start(mcpPort);
+                log("MCP server listening at " + mcpServer.getUrl());
+            } catch (IOException ex) {
+                String errorMsg = "Failed to start MCP server on port " + mcpPort + ": " + ex.getMessage();
+                log("ERROR: " + errorMsg);
+                statusBar.setText(errorMsg);
+            }
+        } else {
+            mcpServer.stop();
+            log("MCP server stopped");
+        }
+        mcpMenuItem.setSelected(mcpServer.isRunning());
+    }
+
+    /**
+     * Refresh the output controls and node chain view after an MCP tool changed the pipeline.
+     */
+    private void refreshAfterPipelineChange() {
+        updateOutputsList();
+        String selected = outputComboBox.getSelectionModel().getSelectedItem();
+        if (selected != null) {
+            selectedOutputId = selected;
+        }
+        updateOutputFields();
+        nodeChainManager.setOutputId(selectedOutputId);
+        saveOutputsToConfig();
     }
 
     /**
@@ -605,7 +683,10 @@ public class OSCProxyApp extends Application {
             calibrationWindow.show();
         });
 
-        toolsMenu.getItems().add(calibrationItem);
+        mcpMenuItem = new CheckMenuItem("MCP Server (port " + mcpPort + ")");
+        mcpMenuItem.setOnAction(e -> setMcpServerRunning(mcpMenuItem.isSelected()));
+
+        toolsMenu.getItems().addAll(calibrationItem, new SeparatorMenuItem(), mcpMenuItem);
         menuBar.getMenus().add(toolsMenu);
 
         // Help menu
@@ -1412,6 +1493,8 @@ public class OSCProxyApp extends Application {
         System.out.println("  --host <hostname>   Playback host (default: 127.0.0.1)");
         System.out.println("  --port <port>       Playback port (default: 9000)");
         System.out.println("  --tcp               Use TCP instead of UDP for input");
+        System.out.println("  --mcp               Start the MCP server for agents (http://127.0.0.1:" + McpServer.DEFAULT_PORT + "/mcp)");
+        System.out.println("  --mcp-port <port>   Start the MCP server on this port");
         System.out.println("  --help              Show this help message");
     }
 
@@ -1558,6 +1641,9 @@ public class OSCProxyApp extends Application {
 
     @Override
     public void stop() {
+        if (mcpServer != null) {
+            mcpServer.stop();
+        }
         proxyService.stopProxy();
         saveOutputsToConfig(); // Save outputs and their node chains
         saveApplicationConfig(); // Save config on exit

@@ -2,7 +2,7 @@ package xyz.theforks.nodes;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.Collections;
 
 import com.illposed.osc.OSCMessage;
 import xyz.theforks.model.MessageRequest;
@@ -21,7 +21,8 @@ public class NodeChain {
         RECORDING
     }
 
-    private final CopyOnWriteArrayList<OSCNode> nodes;
+    // Immutable snapshot, replaced wholesale so a message never sees a half-edited chain
+    private volatile List<OSCNode> nodes = Collections.emptyList();
     private volatile boolean enabled;
     private final Context context;
     private volatile NodeChainDebugWindow debugWindow;
@@ -29,7 +30,6 @@ public class NodeChain {
 
     public NodeChain(Context context) {
         this.context = context;
-        this.nodes = new CopyOnWriteArrayList<>();
         this.enabled = true;
     }
 
@@ -141,9 +141,11 @@ public class NodeChain {
      * Register a node with this chain.
      * @param node The node to add
      */
-    public void registerNode(OSCNode node) {
+    public synchronized void registerNode(OSCNode node) {
         if (node != null) {
-            nodes.add(node);
+            List<OSCNode> updated = new ArrayList<>(nodes);
+            updated.add(node);
+            nodes = Collections.unmodifiableList(updated);
         }
     }
 
@@ -151,26 +153,28 @@ public class NodeChain {
      * Unregister a node from this chain.
      * @param node The node to remove
      */
-    public void unregisterNode(OSCNode node) {
-        nodes.remove(node);
+    public synchronized void unregisterNode(OSCNode node) {
+        List<OSCNode> updated = new ArrayList<>(nodes);
+        if (updated.remove(node)) {
+            nodes = Collections.unmodifiableList(updated);
+        }
     }
 
     /**
      * Clear all nodes from this chain.
      */
-    public void clearNodes() {
-        nodes.clear();
+    public synchronized void clearNodes() {
+        nodes = Collections.emptyList();
     }
 
     /**
-     * Set the list of nodes, replacing any existing nodes.
+     * Set the list of nodes, replacing any existing nodes in a single atomic swap.
      * @param nodeList The new list of nodes
      */
-    public void setNodes(List<OSCNode> nodeList) {
-        nodes.clear();
-        if (nodeList != null) {
-            nodes.addAll(nodeList);
-        }
+    public synchronized void setNodes(List<OSCNode> nodeList) {
+        nodes = nodeList != null
+                ? Collections.unmodifiableList(new ArrayList<>(nodeList))
+                : Collections.emptyList();
     }
 
     /**

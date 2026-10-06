@@ -3,9 +3,9 @@ package xyz.theforks.service;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -49,7 +49,8 @@ public class OSCProxyService {
             }
         });
 
-        outputs = new HashMap<>();
+        // Concurrent: outputs are iterated on the input thread while the UI or MCP server edits them
+        outputs = new ConcurrentHashMap<>();
         // Create default output for backward compatibility
         OSCOutputService defaultOutput = new OSCOutputService("default");
         defaultOutput.setOutHost("127.0.0.1");
