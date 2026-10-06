@@ -11,7 +11,7 @@ OSCPlay is a Java-based OSC (Open Sound Control) proxy server that captures, rec
 
 - **OSC Proxy Server**: Captures OSC messages in real-time and forwards them to destinations
 - **Multiple Outputs**: Fan out messages to multiple destinations simultaneously
-- **Session Recording**: Save OSC automation as JSON sessions with precise timing
+- **Session Recording**: Save OSC automation as JSON sessions with precise timing, optionally filtered to one address pattern so only the device you care about is captured
 - **Session Playback**: Replay recorded sessions without the original OSC source
   - Synchronized audio playback support - play audio files alongside OSC automation
 - **Manual Editing**: Edit recorded OSC messages directly through the UI

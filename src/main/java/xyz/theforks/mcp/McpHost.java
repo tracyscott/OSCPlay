@@ -15,6 +15,12 @@ public interface McpHost {
     void onPipelineChanged();
 
     /**
+     * Called after a tool starts or stops a recording so the UI can follow, since the
+     * record button would otherwise still show the previous state.
+     */
+    void onRecordingChanged();
+
+    /**
      * Persist the live outputs and node chains into the current project's .opp file.
      */
     void saveProject() throws IOException;

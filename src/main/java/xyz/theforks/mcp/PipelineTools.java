@@ -10,6 +10,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.PatternSyntaxException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -210,6 +211,26 @@ public class PipelineTools {
                         .str("content", "Full script source", true)
                         .build(),
                 false, this::writeScript);
+
+        register("start_recording",
+                "Start recording incoming OSC messages to a named session. The raw input is recorded, "
+                + "before any node processing. With address_filter only the messages whose address matches "
+                + "are recorded, which is how you capture one device while others are streaming; it is a "
+                + "Java regex that must match the whole address, so /mag2/xyz records one "
+                + "Interlace tower and /mag[23]/xyz records two. Fails if a recording is "
+                + "already in progress.",
+                new Schema()
+                        .str("name", "Name for the recording session", true)
+                        .str("address_filter",
+                             "Regex matching the whole OSC address; omit to record every message", false)
+                        .build(),
+                false, this::startRecording);
+
+        register("stop_recording",
+                "Stop the recording in progress and save it to the project's Recordings directory, so it "
+                + "can be played back or used to build a sensor calibration. Reports how many messages "
+                + "were kept.",
+                new Schema().build(), false, args -> stopRecording());
 
         register("save_project",
                 "Save the current outputs and node chains to the project's .opp file so they are restored next "
@@ -697,6 +718,56 @@ public class PipelineTools {
             list.add(item.asText());
         }
         return list;
+    }
+
+    // ========== Recording ==========
+
+    private Object startRecording(JsonNode args) throws ToolException {
+        if (proxyService.isRecording()) {
+            throw new ToolException("Already recording \"" + proxyService.getRecordingName()
+                    + "\"; call stop_recording first");
+        }
+
+        String name = requireString(args, "name").trim();
+        if (name.isEmpty()) {
+            throw new ToolException("name must not be blank");
+        }
+        // The name becomes a directory under Recordings, so keep it to one path segment.
+        if (name.contains("/") || name.contains("\\") || name.equals(".") || name.equals("..")) {
+            throw new ToolException("name must be a single directory name, with no path separators");
+        }
+
+        String filter = optString(args, "address_filter");
+        try {
+            proxyService.startRecording(name, filter);
+        } catch (PatternSyntaxException e) {
+            throw new ToolException("address_filter is not a valid regular expression: "
+                    + e.getDescription());
+        }
+        getHost().onRecordingChanged();
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("recording", name);
+        result.put("address_filter", proxyService.getRecordFilter());
+        return result;
+    }
+
+    private Object stopRecording() throws ToolException {
+        if (!proxyService.isRecording()) {
+            throw new ToolException("Nothing is being recorded");
+        }
+        String name = proxyService.getRecordingName();
+        String filter = proxyService.getRecordFilter();
+        int recorded = proxyService.messageCountProperty().get();
+
+        proxyService.stopRecording();
+        getHost().onRecordingChanged();
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("saved", name);
+        result.put("messages", recorded);
+        result.put("address_filter", filter);
+        return result;
     }
 
     // ========== JSON schema builder ==========

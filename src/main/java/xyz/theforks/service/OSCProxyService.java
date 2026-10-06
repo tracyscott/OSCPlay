@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -28,6 +29,7 @@ public class OSCProxyService {
     private final Map<String, OSCOutputService> outputs;
     private RecordingSession currentSession;
     private boolean isRecording = false;
+    private Pattern recordFilter;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final IntegerProperty messageCount = new SimpleIntegerProperty(0);
     private final IntegerProperty totalMessageCount = new SimpleIntegerProperty(0);
@@ -236,10 +238,8 @@ public class OSCProxyService {
                 return;
             }
 
-            // Always record raw input messages (before any processing)
-            if (isRecording && currentSession != null && oscMessage != null) {
-                recordMessage(oscMessage);
-            }
+            // Record raw input messages (before any processing)
+            recordIfMatching(oscMessage);
 
             // Send to all enabled outputs
             // Each output applies its own node chain
@@ -303,11 +303,57 @@ public class OSCProxyService {
         }
     }
 
+    /**
+     * Start recording every incoming message.
+     */
     public void startRecording(String sessionName) {
+        startRecording(sessionName, null);
+    }
+
+    /**
+     * Start recording the incoming messages whose address matches a filter.
+     *
+     * Useful when several devices are sending at once, for example three Interlace
+     * towers streaming continuously while only one is being calibrated.
+     *
+     * @param sessionName   Name of the recording
+     * @param addressFilter Java regex that must match the whole OSC address, or null
+     *                      or blank to record everything
+     * @throws java.util.regex.PatternSyntaxException if the filter is not a valid regex
+     */
+    public void startRecording(String sessionName, String addressFilter) {
+        Pattern filter = (addressFilter == null || addressFilter.isBlank())
+            ? null
+            : Pattern.compile(addressFilter);
+
         currentSession = new RecordingSession(sessionName);
+        currentSession.setAddressFilter(filter == null ? null : filter.pattern());
+        recordFilter = filter;
         isRecording = true;
         messageCount.set(0);
-        System.out.println("Started recording session: " + sessionName);
+        System.out.println("Started recording session: " + sessionName
+            + (filter == null ? "" : " (filter: " + filter.pattern() + ")"));
+    }
+
+    /**
+     * Whether a recording is in progress.
+     */
+    public boolean isRecording() {
+        return isRecording;
+    }
+
+    /**
+     * Name of the recording in progress, or null if nothing is being recorded.
+     */
+    public String getRecordingName() {
+        return currentSession == null ? null : currentSession.getName();
+    }
+
+    /**
+     * The address filter in force for the current recording, or null if there is none.
+     */
+    public String getRecordFilter() {
+        return recordFilter == null ? null : recordFilter.pattern();
     }
 
     public void stopRecording() {
@@ -315,6 +361,7 @@ public class OSCProxyService {
             saveSession(currentSession);
             isRecording = false;
             currentSession = null;
+            recordFilter = null;
             System.out.println("Stopped recording. Total messages: " + messageCount.get());
         }
     }
@@ -374,6 +421,24 @@ public class OSCProxyService {
      * Record an OSC message to the current session.
      * @param message The message to record
      */
+    /**
+     * Record a message if one is being recorded and it passes the address filter.
+     * Package-private so the filtering can be tested without a JavaFX toolkit.
+     */
+    void recordIfMatching(OSCMessage message) {
+        if (isRecording && currentSession != null && message != null && matchesRecordFilter(message)) {
+            recordMessage(message);
+        }
+    }
+
+    /**
+     * Whether an address passes the recording filter. Without a filter everything passes.
+     * The pattern must match the whole address, as node address patterns do.
+     */
+    boolean matchesRecordFilter(OSCMessage message) {
+        return recordFilter == null || recordFilter.matcher(message.getAddress()).matches();
+    }
+
     private void recordMessage(OSCMessage message) {
         OSCMessageRecord record = new OSCMessageRecord(
                 message.getAddress(),

@@ -1,20 +1,46 @@
 package xyz.theforks.service;
 
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import com.illposed.osc.OSCMessage;
+
+import xyz.theforks.model.RecordingSession;
 import xyz.theforks.util.DataDirectory;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Collections;
 import java.util.List;
+import java.util.regex.PatternSyntaxException;
 
 class OSCProxyServiceTest {
+
+    /**
+     * recordMessage updates a JavaFX property through Platform.runLater, so the
+     * toolkit has to be up for the tests that exercise the full record path. On a
+     * machine where it cannot start, those tests are skipped rather than failed.
+     */
+    private static boolean toolkitRunning;
+
+    @BeforeAll
+    static void startToolkit() {
+        try {
+            javafx.application.Platform.startup(() -> { });
+            toolkitRunning = true;
+        } catch (IllegalStateException alreadyStarted) {
+            toolkitRunning = true;
+        } catch (Throwable noToolkit) {
+            toolkitRunning = false;
+        }
+    }
 
     @TempDir
     Path tempDir;
@@ -209,5 +235,108 @@ class OSCProxyServiceTest {
             proxyService.stopProxy();
             proxyService.stopProxy(); // Should be safe to call multiple times
         });
+    }
+
+    private static OSCMessage msg(String address) {
+        return new OSCMessage(address, Collections.singletonList(1.0f));
+    }
+
+    @Test
+    void testNoFilterRecordsEveryAddress() {
+        proxyService.startRecording("unfiltered");
+
+        assertNull(proxyService.getRecordFilter());
+        assertTrue(proxyService.matchesRecordFilter(msg("/mag1/xyz")));
+        assertTrue(proxyService.matchesRecordFilter(msg("/anything/at/all")));
+    }
+
+    @Test
+    void testBlankFilterIsTreatedAsNoFilter() {
+        proxyService.startRecording("blank-filter", "   ");
+
+        assertNull(proxyService.getRecordFilter());
+        assertTrue(proxyService.matchesRecordFilter(msg("/mag3/xyz")));
+    }
+
+    @Test
+    void testFilterKeepsOnlyMatchingAddresses() {
+        // One Interlace tower while all three are streaming.
+        proxyService.startRecording("tower2", "/mag2/xyz");
+
+        assertEquals("/mag2/xyz", proxyService.getRecordFilter());
+        assertTrue(proxyService.matchesRecordFilter(msg("/mag2/xyz")));
+        assertFalse(proxyService.matchesRecordFilter(msg("/mag1/xyz")));
+        assertFalse(proxyService.matchesRecordFilter(msg("/mag3/xyz")));
+    }
+
+    @Test
+    void testFilterMatchesWholeAddress() {
+        // As with node address patterns, a partial match is not enough.
+        proxyService.startRecording("whole", "/mag2/xyz");
+
+        assertFalse(proxyService.matchesRecordFilter(msg("/mag2/xyzz")));
+        assertFalse(proxyService.matchesRecordFilter(msg("/prefix/mag2/xyz")));
+    }
+
+    @Test
+    void testFilterAcceptsRegex() {
+        proxyService.startRecording("two-towers", "/mag[23]/xyz");
+
+        assertTrue(proxyService.matchesRecordFilter(msg("/mag2/xyz")));
+        assertTrue(proxyService.matchesRecordFilter(msg("/mag3/xyz")));
+        assertFalse(proxyService.matchesRecordFilter(msg("/mag1/xyz")));
+    }
+
+    @Test
+    void testInvalidFilterIsRejected() {
+        assertThrows(PatternSyntaxException.class,
+            () -> proxyService.startRecording("bad-filter", "/mag[2/xyz"));
+    }
+
+    @Test
+    void testFilteredRecordingOnlyStoresMatchingMessages() throws IOException {
+        assumeTrue(toolkitRunning, "JavaFX toolkit unavailable");
+        proxyService.startRecording("tower2-only", "/mag2/xyz");
+        proxyService.recordIfMatching(msg("/mag1/xyz"));
+        proxyService.recordIfMatching(msg("/mag2/xyz"));
+        proxyService.recordIfMatching(msg("/mag3/xyz"));
+        proxyService.recordIfMatching(msg("/mag2/xyz"));
+        proxyService.stopRecording();
+
+        RecordingSession saved = RecordingSession.loadSession("tower2-only");
+        assertEquals(2, saved.getMessages().size());
+        saved.getMessages().forEach(
+            m -> assertEquals("/mag2/xyz", m.getAddress()));
+        // The filter is kept with the recording, so its contents are self-describing.
+        assertEquals("/mag2/xyz", saved.getAddressFilter());
+    }
+
+    @Test
+    void testFilterIsClearedAfterStopping() {
+        proxyService.startRecording("filtered", "/mag2/xyz");
+        proxyService.stopRecording();
+
+        assertNull(proxyService.getRecordFilter());
+    }
+
+    @Test
+    void testRecordIfMatchingIgnoredWhenNotRecording() {
+        // No exception, and nothing to save.
+        proxyService.recordIfMatching(msg("/mag2/xyz"));
+
+        assertEquals(0, proxyService.messageCountProperty().get());
+    }
+
+    @Test
+    void testUnfilteredRecordingHasNoStoredFilter() throws IOException {
+        assumeTrue(toolkitRunning, "JavaFX toolkit unavailable");
+        proxyService.startRecording("everything");
+        proxyService.recordIfMatching(msg("/a"));
+        proxyService.recordIfMatching(msg("/b"));
+        proxyService.stopRecording();
+
+        RecordingSession saved = RecordingSession.loadSession("everything");
+        assertEquals(2, saved.getMessages().size());
+        assertNull(saved.getAddressFilter());
     }
 }

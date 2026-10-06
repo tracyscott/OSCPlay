@@ -38,6 +38,7 @@ For how agents should use these tools, and a reference for every node type, see 
 | `add_node` / `update_node` / `remove_node` / `move_node` | Edit a chain by index |
 | `test_chain` | Dry-run a message through an output's chain or through a proposed chain, and show the resulting messages, delays and target outputs. Nothing is sent, and the live nodes' state is left alone. |
 | `send_message` | Inject a message through the live chains to real outputs. The message is not recorded. |
+| `start_recording` / `stop_recording` | Record incoming messages to a session, optionally filtered to one address pattern |
 | `list_scripts` / `read_script` / `write_script` | Manage JavaScript files in the project's `Scripts/` directory, for ScriptNode |
 | `save_project` | Write the current outputs and chains to the project's `.opp` file |
 

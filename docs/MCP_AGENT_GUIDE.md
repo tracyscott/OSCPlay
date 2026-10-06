@@ -179,13 +179,13 @@ Args: `Address Pattern`, `Calibration` (name of a calibration saved in the proje
 
 Turns raw sensor readings into calibrated values. The leading numeric arguments (one per calibration dimension) are replaced by a **single float32** on the same address. Messages that don't contain a full reading pass through. Calibrations are created in OSCPlay's **Tools > Sensor Calibration** window, which agents cannot use through MCP. Configuration fails if the calibration doesn't exist.
 ```json
-{"type": "Calibrate", "args": ["/lx/modulation/Mag1/mag", "Interlace-Mag1"]}
+{"type": "Calibrate", "args": ["/mag1/xyz", "Interlace-Mag1"]}
 ```
 
 #### Interlace Magnometer — `InterlaceMagNode`
 Args: `Magnometer Number` (`1`–`3`)
 
-A Calibrate preset for the Interlace installation. It handles `/lx/modulation/Mag{N}/mag` with the calibration named `Interlace-Mag{N}`, and outputs the tower angle in degrees (0–270). If the project has no such calibration, it falls back to a legacy `calibration{N}.csv` in OSCPlay's working directory, which outputs 0–1 along the sweep. If neither exists, configuration fails.
+A Calibrate preset for the Interlace installation. It handles `/mag<N>/xyz` with the calibration named `Interlace-Mag{N}`, and outputs the tower angle in degrees (0–270). If the project has no such calibration, it falls back to a legacy `calibration{N}.csv` in OSCPlay's working directory, which outputs 0–1 along the sweep. If neither exists, configuration fails.
 ```json
 {"type": "Interlace Magnometer", "args": ["2"]}
 ```
@@ -274,6 +274,35 @@ set_chain {"output_id": "default", "nodes": [
              {"type": "Rename", "args": ["/xy2", "/xy2", "/tilt"]}]}
 ```
 
+## Recording
+
+`start_recording` and `stop_recording` capture incoming messages to a session in the project's
+`Recordings/` directory, which can then be played back or turned into a sensor calibration.
+
+What is recorded is the **raw input**, before any node chain runs, so a recording replays through
+whatever chains exist at playback time rather than baking in today's processing.
+
+`address_filter` is the important option when several devices are sending at once. It is a Java
+regex that must match the whole address, the same rule node address patterns follow:
+
+```json
+start_recording {"name": "tower2-2026-09-23", "address_filter": "/mag2/xyz"}
+stop_recording {}
+```
+
+Without it every message is recorded. The three Interlace towers all stream continuously once
+powered, so calibrating one without a filter produces a recording three times the necessary size.
+
+Notes:
+
+- Only one recording runs at a time; `start_recording` fails rather than silently replacing one in
+  progress. `stop_recording` fails if nothing is being recorded.
+- `name` becomes a directory name, so it cannot contain path separators.
+- `stop_recording` reports `messages`, the number actually kept after filtering. Zero means the
+  filter matched nothing, usually because it only matched part of the address.
+- The app's record button follows these calls, so the UI and the agent cannot disagree about
+  whether a recording is running.
+
 ## Tool reference
 
 | Tool | Args | Notes |
@@ -290,5 +319,7 @@ set_chain {"output_id": "default", "nodes": [
 | `move_node` | `output_id`, `from`, `to` | |
 | `test_chain` | `address`, `args?`, and `output_id` or `nodes` | Dry run; sends nothing |
 | `send_message` | `address`, `args?`, `output_id?` | Real send through live chains; not recorded |
+| `start_recording` | `name`, `address_filter?` | Records raw input; fails if already recording |
+| `stop_recording` | | Saves the recording and reports how many messages were kept |
 | `list_scripts` / `read_script` / `write_script` | `path`, `content` | Restricted to the project's `Scripts/` directory |
 | `save_project` | | Writes outputs and chains to the project `.opp` file |

@@ -6,18 +6,22 @@ import java.io.InputStream;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Properties;
+import java.util.regex.PatternSyntaxException;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
+import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.CheckMenuItem;
 import javafx.scene.control.ComboBox;
+import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
 import javafx.scene.control.Menu;
 import javafx.scene.control.MenuBar;
@@ -257,6 +261,11 @@ public class OSCProxyApp extends Application {
                     @Override
                     public void onPipelineChanged() {
                         refreshAfterPipelineChange();
+                    }
+
+                    @Override
+                    public void onRecordingChanged() {
+                        syncRecordingState();
                     }
 
                     @Override
@@ -1048,24 +1057,88 @@ public class OSCProxyApp extends Application {
         }
     }
 
+    /**
+     * Follow the service's recording state, after an agent has started or stopped a
+     * recording over MCP. Runs on the JavaFX thread, as the MCP tool executor is
+     * Platform::runLater.
+     */
+    private void syncRecordingState() {
+        boolean nowRecording = proxyService.isRecording();
+        if (nowRecording == isRecording) {
+            return;
+        }
+        isRecording = nowRecording;
+        recordButton.setText(isRecording ? "Stop Recording" : "Start Recording");
+        if (isRecording) {
+            log("Started recording session via MCP: " + proxyService.getRecordingName());
+        } else {
+            updateSessionsList();
+            log("Stopped recording via MCP");
+        }
+    }
+
+    /** Last address filter used for a recording, so repeated takes don't need retyping. */
+    private String lastRecordFilter = "";
+
     private void setupEventHandlers() {
         recordButton.setOnAction(e -> {
             if (!isRecording) {
-                TextInputDialog dialog = new TextInputDialog();
+                Dialog<ButtonType> dialog = new Dialog<>();
                 dialog.setTitle("New Recording");
-                dialog.setHeaderText("Enter a name for this recording session:");
-                dialog.showAndWait().ifPresent(name -> {
+                dialog.setHeaderText("Name this recording session.");
+                dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+                dialog.setResultConverter(button -> button);
+
+                TextField nameField = new TextField();
+                nameField.setPromptText("recording name");
+                TextField filterField = new TextField(lastRecordFilter);
+                filterField.setPromptText("all addresses");
+
+                Label filterHelp = new Label(
+                    "Optional. A regex matching the whole address, so only those messages\n"
+                    + "are recorded, e.g. /mag2/xyz for one Interlace tower.");
+                filterHelp.setStyle("-fx-font-size: 11; -fx-text-fill: gray;");
+
+                GridPane grid = new GridPane();
+                grid.setHgap(10);
+                grid.setVgap(8);
+                grid.setPadding(new Insets(10, 10, 0, 10));
+                grid.add(new Label("Name:"), 0, 0);
+                grid.add(nameField, 1, 0);
+                grid.add(new Label("Address filter:"), 0, 1);
+                grid.add(filterField, 1, 1);
+                grid.add(filterHelp, 1, 2);
+                dialog.getDialogPane().setContent(grid);
+
+                Node okButton = dialog.getDialogPane().lookupButton(ButtonType.OK);
+                okButton.setDisable(true);
+                nameField.textProperty().addListener(
+                    (obs, was, now) -> okButton.setDisable(now.trim().isEmpty()));
+                Platform.runLater(nameField::requestFocus);
+
+                if (dialog.showAndWait().orElse(ButtonType.CANCEL) == ButtonType.OK) {
                     OSCInputService inputService = proxyService.getInputService();
                     if (inputService == null) {
                         showError("Error", "Input service not started");
                         return;
                     }
-                    proxyService.startRecording(name);
+                    String name = nameField.getText().trim();
+                    String filter = filterField.getText().trim();
+                    try {
+                        proxyService.startRecording(name, filter);
+                    } catch (PatternSyntaxException pse) {
+                        showError("Invalid address filter",
+                            "\"" + filter + "\" is not a valid regular expression:\n"
+                            + pse.getDescription());
+                        return;
+                    }
+                    lastRecordFilter = filter;
                     isRecording = true;
 
                     recordButton.setText("Stop Recording");
-                    log("Started recording session: " + name);
-                });
+                    log("Started recording session: " + name
+                        + (filter.isEmpty() ? "" : " (filter: " + filter + ")"));
+                }
             } else {
                 OSCInputService inputService = proxyService.getInputService();
                 if (inputService == null) {

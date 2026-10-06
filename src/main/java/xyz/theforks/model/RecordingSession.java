@@ -18,6 +18,8 @@ public class RecordingSession {
     private String name;
     private List<OSCMessageRecord> messages;
     private long startTime;
+    /** Address filter the recording was made with, or null if it captured everything. */
+    private String addressFilter;
 
     // Static context for recordings directory (set by ProjectManager or defaults to DataDirectory)
     private static Path recordingsDir = null;
@@ -55,6 +57,8 @@ public class RecordingSession {
     public List<OSCMessageRecord> getMessages() { return messages; }
     public void setMessages(List<OSCMessageRecord> messages) { this.messages = messages; }
     public long getStartTime() { return startTime; }
+    public String getAddressFilter() { return addressFilter; }
+    public void setAddressFilter(String addressFilter) { this.addressFilter = addressFilter; }
     public void setStartTime(long startTime) { this.startTime = startTime; }
 
     /**

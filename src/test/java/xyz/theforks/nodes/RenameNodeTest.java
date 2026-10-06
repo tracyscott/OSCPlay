@@ -106,9 +106,9 @@ class RenameNodeTest {
     @Test
     void testProcessWithComplexRegexReplacement() {
         // Test a more complex regex that swaps parts of the address
-        node.configure(new String[]{"/lx/modulation/Mag[123]/mag", "/lx/modulation/Mag(\\d)/mag", "/lx/modulation/Angles/angle$1"});
+        node.configure(new String[]{"/mag[123]/xyz", "/mag(\\d)/xyz", "/lx/modulation/Angles/angle$1"});
 
-        OSCMessage message1 = new OSCMessage("/lx/modulation/Mag1/mag", Arrays.asList(0.5f));
+        OSCMessage message1 = new OSCMessage("/mag1/xyz", Arrays.asList(0.5f));
         List<MessageRequest> requests1 = new ArrayList<>();
         requests1.add(new MessageRequest(message1));
         node.process(requests1);
@@ -116,7 +116,7 @@ class RenameNodeTest {
         OSCMessage processed1 = requests1.get(0).getMessage();
         assertEquals("/lx/modulation/Angles/angle1", processed1.getAddress());
 
-        OSCMessage message2 = new OSCMessage("/lx/modulation/Mag3/mag", Arrays.asList(0.8f));
+        OSCMessage message2 = new OSCMessage("/mag3/xyz", Arrays.asList(0.8f));
         List<MessageRequest> requests2 = new ArrayList<>();
         requests2.add(new MessageRequest(message2));
         node.process(requests2);

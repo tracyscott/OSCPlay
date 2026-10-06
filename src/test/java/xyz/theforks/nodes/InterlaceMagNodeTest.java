@@ -65,7 +65,7 @@ class InterlaceMagNodeTest {
     void testPreset() {
         CalibrationBuilder builder = InterlaceMagNode.calibrationBuilder(2);
         assertEquals("Interlace-Mag2", builder.getName());
-        assertEquals("/lx/modulation/Mag2/mag", builder.getAddress());
+        assertEquals("/mag2/xyz", builder.getAddress());
         assertEquals(3, builder.getDimensions());
         assertEquals(CurveModel.TYPE, builder.getModel());
         assertEquals(28, builder.getLabels().size());
@@ -90,13 +90,13 @@ class InterlaceMagNodeTest {
         InterlaceMagNode node = new InterlaceMagNode();
         assertTrue(node.configure(new String[]{"1"}));
         assertArrayEquals(new String[]{"1"}, node.getArgs());
-        assertEquals("/lx/modulation/Mag1/mag", node.getAddressPattern());
+        assertEquals("/mag1/xyz", node.getAddressPattern());
 
         for (double deg = 0; deg <= 270; deg += 15) {
             List<MessageRequest> requests = reading(1, SyntheticSensor.curve(deg, true));
             node.process(requests);
             OSCMessage out = requests.get(0).getMessage();
-            assertEquals("/lx/modulation/Mag1/mag", out.getAddress());
+            assertEquals("/mag1/xyz", out.getAddress());
             assertEquals(deg, (Float) out.getArguments().get(0), 1.0, "at " + deg + " degrees");
         }
     }
@@ -128,10 +128,19 @@ class InterlaceMagNodeTest {
         InterlaceMagNode node = new InterlaceMagNode();
         assertFalse(node.configure(new String[]{"3"}));
 
-        OSCMessage message = new OSCMessage("/lx/modulation/Mag3/mag", Arrays.asList(1, 2, 3));
+        OSCMessage message = new OSCMessage("/mag3/xyz", Arrays.asList(1, 2, 3));
         List<MessageRequest> requests = new ArrayList<>();
         requests.add(new MessageRequest(message));
         node.process(requests);
         assertSame(message, requests.get(0).getMessage());
+    }
+
+    @Test
+    void testAddressMatchesTheFirmwareTarget() {
+        // The sensor boards publish /mag<N>/xyz (the `target` in Interlace_Arduino_Raw.ino),
+        // so the node has to listen there or it never sees a reading.
+        assertEquals("/mag1/xyz", InterlaceMagNode.addressFor(1));
+        assertEquals("/mag2/xyz", InterlaceMagNode.addressFor(2));
+        assertEquals("/mag3/xyz", InterlaceMagNode.addressFor(3));
     }
 }

@@ -21,6 +21,10 @@ import xyz.theforks.calibration.CurveModel;
  * 0 degree stop, then at each 10 degree mark, ending at the 270 degree stop; see
  * {@link #calibrationBuilder(int)}. The output is the tower angle in degrees.
  *
+ * The node reads the raw three-axis reading straight off the sensor board, on the address
+ * the firmware publishes ({@link #addressFor(int)}), so no renaming is needed in front of
+ * it. Rename afterwards to reach whatever consumes the angle.
+ *
  * If the project has no calibration, falls back to the legacy calibration{N}.csv
  * (timestamp,magx,magy,magz) in the working directory, which outputs 0-1 along the sweep.
  */
@@ -30,8 +34,12 @@ public class InterlaceMagNode extends CalibrateNode {
 
     private int magNum;
 
+    /**
+     * The address a tower's sensor board publishes on, matching the `target` in the
+     * Interlace_Arduino_Raw sketch.
+     */
     public static String addressFor(int magNum) {
-        return "/lx/modulation/Mag" + magNum + "/mag";
+        return "/mag" + magNum + "/xyz";
     }
 
     public static String calibrationNameFor(int magNum) {

@@ -19,12 +19,12 @@ You need:
 - The tower sensors powered on and connected.
 - **28 marks** on each tower, 10° apart. The marks run from the **0° stop** to the **270° stop**, and both stops count as marks. Check the marks are there and readable before you begin.
 
-To check a sensor is working, click **Monitor** in OSCPlay and turn the tower a little. Lines for that tower (for example `/lx/modulation/Mag1/mag`) should appear and change as it moves. Close the Monitor window when you're done.
+To check a sensor is working, click **Monitor** in OSCPlay and turn the tower a little. Lines for that tower (for example `/mag1/xyz`) should appear and change as it moves. Close the Monitor window when you're done.
 
 ## Step 1: Record the tower visiting every mark
 
 1. Turn the tower until it rests against the **0° stop**.
-2. In OSCPlay, click **Start Recording**. Name the recording after the tower and the date, for example `tower1-2026-09-23`, and click **OK**.
+2. In OSCPlay, click **Start Recording**. Name the recording after the tower and the date, for example `tower1-2026-09-23`. Set **Address filter** to just this tower's sensor, for example `/mag1/xyz`, then click **OK**. All three towers send continuously as soon as they are powered up, so without the filter the recording also fills with the other two.
 3. **Hold the tower still for 3 seconds.** Count "one thousand one, one thousand two, one thousand three".
 4. Turn the tower to the **10°** mark and **hold still for 3 seconds**.
 5. Keep going, **mark by mark, in order**: 20°, 30°, and so on. At each mark, hold still for 3 seconds.
@@ -65,7 +65,7 @@ To check the calibration:
 
 ## Repeat for the other towers
 
-Do steps 1 to 3 for each remaining tower, choosing the matching preset (**Interlace Mag 2**, **Interlace Mag 3**).
+Do steps 1 to 3 for each remaining tower, choosing the matching preset (**Interlace Mag 2**, **Interlace Mag 3**). The **Address filter** box keeps whatever you last typed, so remember to change its tower number too.
 
 ## If something goes wrong
 
@@ -75,7 +75,10 @@ Some stops were probably too short. Record again, and count to 3 at every mark.
 **The message says more than 28 marks were found.**
 The tower was probably paused somewhere between marks, or stayed still before you started turning. Record again, and keep the tower moving between marks.
 
-**"No messages on /lx/modulation/Mag1/mag..."**
+**The recording is much bigger than expected.**
+The **Address filter** was probably left blank, so the recording holds all three towers. The marks are still found from the right tower's messages, so the calibration is usable, but the recording is three times the size for no benefit. Set the filter next time.
+
+**"No messages on /mag1/xyz..."**
 Either the recording didn't pick up this tower's sensor, or you chose the wrong preset or recording. Check the preset matches the tower. Then use **Monitor** to check the sensor is sending (see [Before you start](#before-you-start)).
 
 **The Save button is greyed out.**

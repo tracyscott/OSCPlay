@@ -33,6 +33,7 @@ class McpServerTest {
     private OSCProxyService proxyService;
     private McpServer server;
     private final AtomicInteger changeCount = new AtomicInteger();
+    private final AtomicInteger recordingChangeCount = new AtomicInteger();
     private int nextId = 1;
 
     @BeforeEach
@@ -43,6 +44,11 @@ class McpServerTest {
             @Override
             public void onPipelineChanged() {
                 changeCount.incrementAndGet();
+            }
+
+            @Override
+            public void onRecordingChanged() {
+                recordingChangeCount.incrementAndGet();
             }
 
             @Override
@@ -283,5 +289,87 @@ class McpServerTest {
                 .POST(HttpRequest.BodyPublishers.ofString("{}"))
                 .build(), HttpResponse.BodyHandlers.ofString());
         assertEquals(403, foreign.statusCode());
+    }
+
+    @Test
+    void testRecordingToolsAreListed() throws Exception {
+        JsonNode tools = request("tools/list", null).at("/result/tools");
+        java.util.List<String> names = new java.util.ArrayList<>();
+        tools.forEach(t -> names.add(t.get("name").asText()));
+        assertTrue(names.contains("start_recording"), names.toString());
+        assertTrue(names.contains("stop_recording"), names.toString());
+    }
+
+    @Test
+    void testStartAndStopRecording() throws Exception {
+        JsonNode started = callOk("start_recording", java.util.Map.of("name", "agent-take"));
+        assertEquals("agent-take", started.get("recording").asText());
+        assertTrue(started.get("address_filter").isNull());
+        assertTrue(proxyService.isRecording());
+        assertEquals(1, recordingChangeCount.get());
+
+        JsonNode stopped = callOk("stop_recording", java.util.Map.of());
+        assertEquals("agent-take", stopped.get("saved").asText());
+        assertEquals(0, stopped.get("messages").asInt());
+        assertFalse(proxyService.isRecording());
+        assertEquals(2, recordingChangeCount.get());
+
+        assertTrue(proxyService.getRecordedSessions().contains("agent-take"));
+    }
+
+    @Test
+    void testStartRecordingWithAddressFilter() throws Exception {
+        JsonNode started = callOk("start_recording", java.util.Map.of(
+                "name", "tower2", "address_filter", "/mag2/xyz"));
+
+        assertEquals("/mag2/xyz", started.get("address_filter").asText());
+        assertEquals("/mag2/xyz", proxyService.getRecordFilter());
+
+        JsonNode stopped = callOk("stop_recording", java.util.Map.of());
+        assertEquals("/mag2/xyz", stopped.get("address_filter").asText());
+    }
+
+    @Test
+    void testStartRecordingRejectsInvalidFilter() {
+        String error = callError("start_recording", java.util.Map.of(
+                "name", "bad", "address_filter", "/mag[2/xyz"));
+
+        assertTrue(error.contains("not a valid regular expression"), error);
+        assertFalse(proxyService.isRecording());
+    }
+
+    @Test
+    void testStartRecordingRejectsPathSeparatorsInName() {
+        String error = callError("start_recording", java.util.Map.of("name", "../escape"));
+
+        assertTrue(error.contains("path separators"), error);
+        assertFalse(proxyService.isRecording());
+    }
+
+    @Test
+    void testStartRecordingRejectsBlankName() {
+        String error = callError("start_recording", java.util.Map.of("name", "   "));
+
+        assertTrue(error.contains("must not be blank"), error);
+        assertFalse(proxyService.isRecording());
+    }
+
+    @Test
+    void testStartRecordingRefusesWhenAlreadyRecording() throws Exception {
+        callOk("start_recording", java.util.Map.of("name", "first"));
+
+        String error = callError("start_recording", java.util.Map.of("name", "second"));
+        assertTrue(error.contains("Already recording"), error);
+        assertTrue(error.contains("first"), error);
+
+        // The first recording is untouched.
+        assertEquals("first", proxyService.getRecordingName());
+        callOk("stop_recording", java.util.Map.of());
+    }
+
+    @Test
+    void testStopRecordingWithoutStarting() {
+        String error = callError("stop_recording", java.util.Map.of());
+        assertTrue(error.contains("Nothing is being recorded"), error);
     }
 }
