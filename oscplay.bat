@@ -1,6 +1,6 @@
 @echo off
 
-set VERSION=1.1.1
+set VERSION=2.1.0
 
 rem OSCPlay - Interactive GUI mode
 rem Requires JFX_SDK environment variable to be set to JavaFX SDK lib directory

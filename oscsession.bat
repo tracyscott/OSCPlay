@@ -1,7 +1,7 @@
 @echo off
 setlocal enabledelayedexpansion
 
-set VERSION=1.1.1
+set VERSION=2.1.0
 
 rem OSCSession - Non-interactive session playback
 rem Usage: oscsession.bat <session_name> [additional_args]
