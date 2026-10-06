@@ -68,17 +68,31 @@ public class CalibrationBuilder {
 
     /**
      * Evenly spaced labels from start to end inclusive, e.g. labelRange(0, 270, 10) for 0, 10, ... 270.
+     *
+     * @throws IllegalArgumentException if the step does not divide start to end evenly, which
+     *         would otherwise put the last label past the end and mislabel the final mark
      */
     public static List<Double> labelRange(double start, double end, double step) {
         if (step == 0 || Math.signum(end - start) * Math.signum(step) < 0) {
             throw new IllegalArgumentException("Step " + step + " doesn't lead from " + start + " to " + end);
         }
+        double steps = (end - start) / step;
+        int count = (int) Math.round(steps);
+        if (Math.abs(steps - count) > 1e-6) {
+            throw new IllegalArgumentException(String.format(
+                "Step %s doesn't divide %s to %s evenly: the last mark would be labelled %s instead of %s",
+                trim(step), trim(start), trim(end), trim(start + count * step), trim(end)));
+        }
         List<Double> labels = new ArrayList<>();
-        int count = (int) Math.round((end - start) / step);
         for (int i = 0; i <= count; i++) {
             labels.add(start + i * step);
         }
         return labels;
+    }
+
+    /** Drop a trailing .0 so messages read 270 rather than 270.0. */
+    private static String trim(double value) {
+        return value == Math.rint(value) ? String.valueOf((long) value) : String.valueOf(value);
     }
 
     public List<CalibrationSample> extractSamples(List<OSCMessageRecord> messages) {

@@ -185,7 +185,7 @@ Turns raw sensor readings into calibrated values. The leading numeric arguments 
 #### Interlace Magnometer — `InterlaceMagNode`
 Args: `Magnometer Number` (`1`–`3`)
 
-A Calibrate preset for the Interlace installation. It handles `/mag<N>/xyz` with the calibration named `Interlace-Mag{N}`, and outputs the tower angle in degrees (0–270). If the project has no such calibration, it falls back to a legacy `calibration{N}.csv` in OSCPlay's working directory, which outputs 0–1 along the sweep. If neither exists, configuration fails.
+A Calibrate preset for the Interlace installation. It handles `/mag<N>/xyz` with the calibration named `Interlace-Mag{N}`, and outputs the tower angle in degrees (0–270). The calibration's mark spacing is chosen when it is built, not here: 10° gives 28 marks and the most accurate fit, 30° gives 10 marks and a much quicker setup for about 0.13° of error. If the project has no such calibration, it falls back to a legacy `calibration{N}.csv` in OSCPlay's working directory, which outputs 0–1 along the sweep. If neither exists, configuration fails.
 ```json
 {"type": "Interlace Magnometer", "args": ["2"]}
 ```

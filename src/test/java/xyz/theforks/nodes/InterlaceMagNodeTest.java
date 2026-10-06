@@ -143,4 +143,38 @@ class InterlaceMagNodeTest {
         assertEquals("/mag2/xyz", InterlaceMagNode.addressFor(2));
         assertEquals("/mag3/xyz", InterlaceMagNode.addressFor(3));
     }
+
+    @Test
+    void testCalibrationBuilderDefaultsToTenDegreeMarks() {
+        assertEquals(28, InterlaceMagNode.calibrationBuilder(1).getLabels().size());
+    }
+
+    @Test
+    void testCalibrationBuilderTakesAMarkSpacing() {
+        // Fewer stops to visit, quicker setup, coarser fit.
+        assertEquals(19, InterlaceMagNode.calibrationBuilder(1, 15).getLabels().size());
+        assertEquals(10, InterlaceMagNode.calibrationBuilder(2, 30).getLabels().size());
+        assertEquals(4, InterlaceMagNode.calibrationBuilder(3, 90).getLabels().size());
+    }
+
+    @Test
+    void testMarkSpacingStillEndsOnTheFarStop() {
+        java.util.List<Double> labels = InterlaceMagNode.calibrationBuilder(1, 45).getLabels();
+        assertEquals(0.0, labels.get(0), 1e-9);
+        assertEquals(InterlaceMagNode.ARC_DEGREES, labels.get(labels.size() - 1), 1e-9);
+    }
+
+    @Test
+    void testMarkSpacingMustDivideTheArc() {
+        assertThrows(IllegalArgumentException.class,
+            () -> InterlaceMagNode.calibrationBuilder(1, 20));
+    }
+
+    @Test
+    void testMarkCountFor() {
+        assertEquals(28, InterlaceMagNode.markCountFor(10));
+        assertEquals(19, InterlaceMagNode.markCountFor(15));
+        assertEquals(10, InterlaceMagNode.markCountFor(30));
+        assertEquals(4, InterlaceMagNode.markCountFor(90));
+    }
 }

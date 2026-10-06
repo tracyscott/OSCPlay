@@ -133,4 +133,37 @@ class CalibrationBuilderTest {
         assertThrows(IOException.class, () -> store.load("missing"));
         assertDoesNotThrow(() -> assertTrue(store.list().isEmpty()));
     }
+
+    @Test
+    void testLabelRangeRejectsStepThatDoesNotDivideEvenly() {
+        // 20 degrees across a 270 degree arc would put the last mark at 280, silently
+        // mislabelling the far stop.
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+            () -> CalibrationBuilder.labelRange(0, 270, 20));
+        assertTrue(e.getMessage().contains("280"), e.getMessage());
+        assertTrue(e.getMessage().contains("270"), e.getMessage());
+    }
+
+    @Test
+    void testLabelRangeAcceptsEveryInterlaceMarkSpacing() {
+        // The spacings offered for trading setup time against accuracy.
+        for (double step : new double[]{5, 6, 9, 10, 15, 18, 27, 30, 45, 54, 90, 135}) {
+            List<Double> labels = CalibrationBuilder.labelRange(0, 270, step);
+            assertEquals(270.0, labels.get(labels.size() - 1), 1e-9,
+                "spacing " + step + " should end on the far stop");
+            assertEquals(0.0, labels.get(0), 1e-9);
+            assertEquals((int) Math.round(270 / step) + 1, labels.size(), "spacing " + step);
+        }
+    }
+
+    @Test
+    void testLabelRangeMessageNamesBothEnds() {
+        // 100 / 30 rounds to 3 steps, so the last mark would land on 90, short of 100.
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+            () -> CalibrationBuilder.labelRange(0, 100, 30));
+        assertTrue(e.getMessage().contains("90"), e.getMessage());
+        assertTrue(e.getMessage().contains("100"), e.getMessage());
+        // Reads as whole numbers rather than 90.0 / 100.0.
+        assertFalse(e.getMessage().contains("100.0"), e.getMessage());
+    }
 }

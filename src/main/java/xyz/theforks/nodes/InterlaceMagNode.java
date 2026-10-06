@@ -47,15 +47,34 @@ public class InterlaceMagNode extends CalibrateNode {
     }
 
     /**
-     * Builder for a tower's calibration from a mark-to-mark recording.
+     * Builder for a tower's calibration from a mark-to-mark recording, with marks
+     * {@link #MARK_SPACING_DEGREES} apart.
      */
     public static CalibrationBuilder calibrationBuilder(int magNum) {
+        return calibrationBuilder(magNum, MARK_SPACING_DEGREES);
+    }
+
+    /**
+     * Builder for a tower's calibration at a chosen mark spacing, trading setup time
+     * against accuracy: wider marks mean fewer stops to visit and a coarser fit.
+     *
+     * @param markSpacingDegrees Degrees between marks. Must divide {@link #ARC_DEGREES}
+     *        evenly, so that the last mark lands on the far stop.
+     */
+    public static CalibrationBuilder calibrationBuilder(int magNum, double markSpacingDegrees) {
         return new CalibrationBuilder()
             .name(calibrationNameFor(magNum))
             .address(addressFor(magNum))
             .dimensions(3)
             .model(CurveModel.TYPE)
-            .labels(CalibrationBuilder.labelRange(0, ARC_DEGREES, MARK_SPACING_DEGREES));
+            .labels(CalibrationBuilder.labelRange(0, ARC_DEGREES, markSpacingDegrees));
+    }
+
+    /**
+     * How many marks a given spacing produces across the arc, both stops included.
+     */
+    public static int markCountFor(double markSpacingDegrees) {
+        return (int) Math.round(ARC_DEGREES / markSpacingDegrees) + 1;
     }
 
     @Override

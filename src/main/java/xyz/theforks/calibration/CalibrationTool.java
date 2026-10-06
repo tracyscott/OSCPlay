@@ -20,6 +20,9 @@ public class CalibrationTool {
         System.out.println();
         System.out.println("Sensor (either a preset or explicit settings):");
         System.out.println("  --preset interlace --mag <1-3>   Interlace tower: 3-axis curve, marks 0-270 every 10 degrees");
+        System.out.println("  --mark-spacing <degrees>        Preset mark spacing, e.g. 15 for 19 marks or 30 for 10.");
+        System.out.println("                                  Must divide 270 evenly. Fewer marks, quicker setup,");
+        System.out.println("                                  coarser fit.");
         System.out.println("  --name <calibration>            Calibration name");
         System.out.println("  --address <regex>               Sensor message address pattern");
         System.out.println("  --dims <n>                      Numeric arguments per reading (default 1)");
@@ -53,6 +56,7 @@ public class CalibrationTool {
         String preset = null;
         Integer mag = null;
         String labels = null;
+        Double markSpacing = null;
         boolean noLabels = false;
         boolean dryRun = false;
         CalibrationBuilder builder = new CalibrationBuilder();
@@ -79,6 +83,7 @@ public class CalibrationTool {
                 case "--csv": csv = value; break;
                 case "--preset": preset = value; break;
                 case "--mag": mag = Integer.parseInt(value); break;
+                case "--mark-spacing": markSpacing = Double.parseDouble(value); break;
                 case "--name": builder.name(value); break;
                 case "--address": builder.address(value); break;
                 case "--dims": builder.dimensions(Integer.parseInt(value)); break;
@@ -98,7 +103,9 @@ public class CalibrationTool {
             if (mag == null) {
                 throw new IllegalArgumentException("--preset interlace needs --mag <1-3>");
             }
-            CalibrationBuilder p = InterlaceMagNode.calibrationBuilder(mag);
+            CalibrationBuilder p = markSpacing != null
+                ? InterlaceMagNode.calibrationBuilder(mag, markSpacing)
+                : InterlaceMagNode.calibrationBuilder(mag);
             builder.name(builder.getName() != null ? builder.getName() : p.getName())
                 .address(builder.getAddress() != null ? builder.getAddress() : p.getAddress())
                 .dimensions(p.getDimensions())
