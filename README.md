@@ -76,7 +76,7 @@ MIT License
 
 ## Version
 
-Current version: 2.3.0
+Current version: 2.4.0
 
 
 
