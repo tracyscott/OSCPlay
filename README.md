@@ -41,6 +41,11 @@ Both installers bundle their own Java runtime, so no separate Java install is ne
 Running from the command line supports a --project MyProject argument that will bypass
 the project selection splash screen for unattended and auto-starting installations.
 
+On Windows, `oscplay-startup.bat` wraps that up for a show machine: set `PROJECT` at the
+top, then put a shortcut to it in the Startup folder (Win+R, `shell:startup`). It finds the
+installed `OSCPlay.exe` on its own, falls back to a shaded JAR built from source, and logs
+each start to `Documents\OSCPlay\startup.log`.
+
 ### Agent control (MCP)
 OSCPlay can run an MCP server so AI agents (Claude Code, etc.) can inspect and edit outputs
 and node chains while it runs. It runs by default on `127.0.0.1:7770`; `--no-mcp` turns it off. See
